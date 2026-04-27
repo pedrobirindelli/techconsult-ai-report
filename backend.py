@@ -399,7 +399,16 @@ def generate_report():
                 
                 yield f"data: {json.dumps({'status': 'Concluído!', 'step': 7, 'file_id': folder_id})}\n\n"
             except Exception as e:
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                error_msg = str(e)
+                if "403" in error_msg or "PERMISSION_DENIED" in error_msg or "API key" in error_msg or "API_KEY_INVALID" in error_msg:
+                    error_msg = "Falha de Autenticação na IA: A chave da API do Gemini atual é inválida, vazou ou foi bloqueada pelo Google. Por favor, gere uma nova chave e atualize no painel do servidor."
+                elif "429" in error_msg or "quota" in error_msg.lower() or "exhausted" in error_msg.lower():
+                    error_msg = "Limite da IA Excedido: A cota de uso da API do Gemini foi atingida. Tente novamente mais tarde."
+                elif "500" in error_msg or "503" in error_msg:
+                    error_msg = "IA Indisponível: Os servidores do Google estão instáveis no momento. Tente novamente em alguns minutos."
+                else:
+                    error_msg = f"Erro ao gerar laudo: {error_msg}"
+                yield f"data: {json.dumps({'error': error_msg})}\n\n"
 
         return Response(stream_with_context(generate_stream()), mimetype='text/event-stream')
     except Exception as e:
