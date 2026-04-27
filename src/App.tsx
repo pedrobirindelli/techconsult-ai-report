@@ -92,11 +92,18 @@ export default function App() {
     }
   }
 
-  const handleKnowledgeRulesChange = async (newText: string) => {
+  const handleKnowledgeRulesChange = (newText: string) => {
     setKnowledgeRules(newText);
-    await supabase.auth.updateUser({
-      data: { knowledge_rules: newText }
-    });
+  }
+
+  const handleKnowledgeRulesBlur = async () => {
+    try {
+      await supabase.auth.updateUser({
+        data: { knowledge_rules: knowledgeRules }
+      });
+    } catch (e) {
+      console.error("Erro ao salvar regras de contexto no Supabase", e)
+    }
   }
 
   // --- LOGICA DE FILESYSTEM LOCAL ---
@@ -644,6 +651,7 @@ export default function App() {
                 placeholder="Instrua a IA sobre termos técnicos, estilo de escrita..."
                 value={knowledgeRules}
                 onChange={(e) => handleKnowledgeRulesChange(e.target.value)}
+                onBlur={handleKnowledgeRulesBlur}
               ></textarea>
               <button onClick={savePermanentRule} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition"><Save size={18} /> Salvar Regra</button>
               
