@@ -58,7 +58,13 @@ def require_auth(f):
         # apenas verificamos se o token existe. Em produção, você deve configurar o SUPABASE_JWT_SECRET.
         if not SUPABASE_JWT_SECRET:
             # print("Aviso: SUPABASE_JWT_SECRET não configurado. Verificação de token simplificada.")
-            if token.startswith("Bearer "): return f(*args, **kwargs)
+            if token.startswith("Bearer "): 
+                try:
+                    t = token.replace("Bearer ", "")
+                    request.user = jwt.decode(t, options={"verify_signature": False})
+                except:
+                    pass
+                return f(*args, **kwargs)
             return jsonify({"error": "Token inválido"}), 401
 
         try:
