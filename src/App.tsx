@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react'
-import { FileSpreadsheet, FileText, Upload, Settings, Play, Brain, BrainCircuit, FileSignature, DollarSign, Download, CheckCircle2, Save, Trash2, FilePlus, LogOut, FolderOpen, Users, Loader2, Smile } from 'lucide-react'
+import { Upload, Save, FileText, Download, Loader2, FolderOpen, BrainCircuit, Settings, ChevronDown, Trash2, FileSpreadsheet, Play, Brain, FileSignature, DollarSign, LogOut, Users, Smile, CheckCircle2, FilePlus } from 'lucide-react'
 import { supabase } from './lib/supabaseClient'
+
+interface SavedPrompt {
+  id: string;
+  title: string;
+  prompt: string;
+}
 import Login from './components/Login'
 import { ForcePasswordChange } from './components/ForcePasswordChange'
 import { AdminPanel } from './components/AdminPanel'
@@ -63,6 +69,10 @@ export default function App() {
   const [projectHandle, setProjectHandle] = useState<FileSystemDirectoryHandle | null>(null)
   const [isSaving, setIsSaving] = useState(false)
 
+  // Joorrge Prompt Library
+  const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([])
+  const [showPromptList, setShowPromptList] = useState(false)
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
@@ -78,8 +88,53 @@ export default function App() {
   useEffect(() => {
     if (session) {
       fetchRules()
+      fetchSavedPrompts()
     }
   }, [session])
+
+  const fetchSavedPrompts = async () => {
+    if (!session?.user) return;
+    const { data, error } = await supabase
+      .from('saved_prompts')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (data && !error) {
+      setSavedPrompts(data);
+    }
+  };
+
+  const handleSavePrompt = async () => {
+    if (!agentPrompt.trim()) {
+      alert("Digite uma instrução primeiro antes de salvar.");
+      return;
+    }
+    const title = prompt("Qual o nome desta instrução? (Ex: Padrão Vistoria Caixa)");
+    if (!title) return;
+
+    const { error } = await supabase
+      .from('saved_prompts')
+      .insert([{ user_id: session?.user.id, title, prompt: agentPrompt }]);
+    
+    if (!error) {
+      fetchSavedPrompts();
+      alert("Instrução salva com sucesso na sua biblioteca!");
+    } else {
+      console.error(error);
+      alert("Erro ao salvar a instrução no banco de dados.");
+    }
+  };
+
+  const handleDeletePrompt = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Tem certeza que deseja deletar esta instrução salva?")) return;
+    const { error } = await supabase
+      .from('saved_prompts')
+      .delete()
+      .eq('id', id);
+    if (!error) {
+      fetchSavedPrompts();
+    }
+  };
 
   const handleAgentSubmit = async () => {
     if (!agentFile) {
@@ -163,7 +218,7 @@ export default function App() {
           setAgentResultUrl("saved"); // Apenas para sair do estado de isRunning
         } else {
           // Fallback para navegadores sem suporte
-          const url = window.URL.createObjectURL(blob);
+          const url = URL.createObjectURL(blob);
           setAgentResultUrl(url);
           const a = document.createElement('a');
           a.href = url;
@@ -886,10 +941,73 @@ export default function App() {
 
                   {/* Prompt */}
                   <div className="space-y-4">
-                    <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-                      <Settings size={18} className="text-indigo-500" />
-                      2. Instruções de Formatação (Prompt)
-                    </h3>
+                    <div className="flex justify-between items-center relative">
+                      <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+                        <Settings size={18} className="text-indigo-500" />
+                        2. Instruções de Formatação (Prompt)
+                      </h3>
+                      
+                      {/* Biblioteca de Instruções */}
+                      <div className="relative">
+                        <button 
+                          onClick={() => setShowPromptList(!showPromptList)}
+                          className="flex items-center gap-2 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors border border-indigo-200"
+                        >
+                          <FolderOpen size={14} />
+                          Minhas Instruções
+                          <ChevronDown size={14} />
+                        </button>
+                        
+                        {showPromptList && (
+                          <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-200 z-10 overflow-hidden">
+                            <div className="p-2 border-b border-slate-100">
+                              <p className="text-xs font-semibold text-slate-500 px-2 py-1">BIBLIOTECA SALVA</p>
+                            </div>
+                            <div className="max-h-60 overflow-y-auto">
+                              {savedPrompts.length === 0 ? (
+                                <p className="text-xs text-slate-400 p-4 text-center">Nenhuma instrução salva ainda.</p>
+                              ) : (
+                                savedPrompts.map(p => (
+                                  <div 
+                                    key={p.id}
+                                    onClick={() => {
+                                      setAgentPrompt(p.prompt);
+                                      setShowPromptList(false);
+                                    }}
+                                    className="flex items-center justify-between p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0 group"
+                                  >
+                                    <div className="flex-1 min-w-0 pr-2">
+                                      <p className="text-sm font-medium text-slate-800 truncate">{p.title}</p>
+                                      <p className="text-xs text-slate-400 truncate mt-0.5">{p.prompt}</p>
+                                    </div>
+                                    <button 
+                                      onClick={(e) => handleDeletePrompt(p.id, e)}
+                                      className="text-slate-300 hover:text-red-500 p-1.5 rounded-md hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                                      title="Excluir instrução"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                            <div className="p-2 bg-slate-50 border-t border-slate-100">
+                              <button
+                                onClick={() => {
+                                  setShowPromptList(false);
+                                  handleSavePrompt();
+                                }}
+                                className="w-full flex items-center justify-center gap-2 text-xs font-medium text-indigo-600 bg-white border border-indigo-200 hover:bg-indigo-50 py-2 rounded-lg transition-colors"
+                              >
+                                <Save size={14} />
+                                Salvar Instrução Atual
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
                     <textarea 
                       className="w-full h-40 border border-slate-200 rounded-xl p-4 text-sm resize-none focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700 bg-slate-50"
                       value={agentPrompt}
