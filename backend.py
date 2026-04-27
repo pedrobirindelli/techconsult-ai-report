@@ -750,11 +750,15 @@ def format_document_agent():
             )
         )
         
-        raw_text = response.text.strip()
-        if raw_text.startswith("```json"): raw_text = raw_text[7:]
-        elif raw_text.startswith("```"): raw_text = raw_text[3:]
-        if raw_text.endswith("```"): raw_text = raw_text[:-3]
+        import re
         
+        raw_text = response.text.strip()
+        
+        # Procura por um array JSON dentro do texto
+        match = re.search(r'\[.*\]', raw_text, re.DOTALL)
+        if match:
+            raw_text = match.group(0)
+            
         plan_steps = json.loads(raw_text.strip())
         
         # Executar plano localmente

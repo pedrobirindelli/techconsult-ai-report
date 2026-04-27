@@ -173,12 +173,13 @@ export default function App() {
       
       if (!res.ok) {
         const errText = await res.text();
+        let errData;
         try {
-          const errData = JSON.parse(errText);
-          throw new Error(errData.error || "Erro no Agente");
+          errData = JSON.parse(errText);
         } catch {
           throw new Error("Erro no servidor da IA. Status: " + res.status);
         }
+        throw new Error(errData.error || "Erro no Agente");
       }
       
       clearInterval(interval);
