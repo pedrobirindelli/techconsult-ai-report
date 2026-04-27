@@ -389,7 +389,15 @@ def generate_report():
                     sources_text += f"\n[Fonte {idx+1}]\n" + extract_text(path)
 
                 yield f"data: {json.dumps({'status': 'Analisando dados com Gemini 2.5 Pro (pode demorar alguns minutos)...', 'step': 5})}\n\n"
-                sys_inst = f"Engenheiro Civil Perito. Você deve OBRIGATORIAMENTE retornar APENAS um ARRAY JSON de objetos. Formato EXATO exigido: [{{'type': 'heading1'|'paragraph'|'table'|'image', 'text': 'conteudo aqui', 'headers': [], 'rows': []}}]. NUNCA traduza ou mude o nome das chaves 'type' e 'text'. Regras: {rules}"
+                sys_inst = (
+                    f"Engenheiro Civil Perito. Retorne OBRIGATORIAMENTE APENAS um ARRAY JSON de objetos. "
+                    f"Formatos permitidos: "
+                    f"1. Texto: {{'type': 'heading1'|'paragraph', 'text': 'conteudo'}} "
+                    f"2. Tabela: {{'type': 'table', 'headers': [], 'rows': [[]]}} "
+                    f"3. Imagem: {{'type': 'image', 'url': 'URL_FORNECIDA', 'caption': 'Legenda técnica'}} "
+                    f"REGRAS DE IMAGEM: Não inclua 100% das fotos (evite redundância), mas INCLUA TODAS as imagens relevantes para ilustrar anomalias/apontamentos. Toda imagem deve ter uma legenda descritiva. Use a URL exata do MAPEAMENTO DE IMAGENS. "
+                    f"NUNCA traduza ou mude o nome das chaves JSON. Regras do Usuário: {rules}"
+                )
                 user_prompt = f"REFERÊNCIAS:\n{all_ref_text[:15000]}\n\nFONTES:\n{sources_text[:15000]}\n\nDADOS:\n{all_excel_str}\n\n{media_mapping}"
                 
                 response = client.models.generate_content_stream(
