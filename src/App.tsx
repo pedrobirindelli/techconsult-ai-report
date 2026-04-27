@@ -1051,13 +1051,15 @@ export default function App() {
                         <p className="text-sm text-emerald-700">As instruções foram aplicadas pelo Agente Especialista.</p>
                       </div>
                       <div className="flex gap-4 w-full mt-2">
-                        <a 
-                          href={agentResultUrl} 
-                          download="Laudo_Formatado_Agente.docx" 
-                          className="flex-1 bg-emerald-600 text-white px-6 py-3 rounded-lg shadow font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
-                        >
-                          <Download size={18} /> BAIXAR WORD
-                        </a>
+                        {agentResultUrl !== "saved" && agentResultUrl !== "cancelled" && (
+                          <a 
+                            href={agentResultUrl} 
+                            download="Laudo_Formatado_Agente.docx" 
+                            className="flex-1 bg-emerald-600 text-white px-6 py-3 rounded-lg shadow font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+                          >
+                            <Download size={18} /> BAIXAR WORD
+                          </a>
+                        )}
                         <button 
                           onClick={() => {
                             setAgentResultUrl(null);
