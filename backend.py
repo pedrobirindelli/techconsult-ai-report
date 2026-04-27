@@ -333,11 +333,20 @@ def generate_report():
                 
                 all_excel_str = ""
                 url_to_local = {}
-                yield f"data: {json.dumps({'status': 'Extraindo dados das planilhas...', 'step': 2})}\n\n"
+                yield f"data: {json.dumps({'status': 'Lendo planilhas de vistoria...', 'step': 2})}\n\n"
                 for idx, f in enumerate(excel_files):
                     path = os.path.join(run_folder, f"data_{idx}.xlsx")
                     try:
                         df = pd.read_excel(path)
+                        
+                        sample_val = ""
+                        for val in df.values.flatten():
+                            if isinstance(val, str) and len(val) > 20 and not val.startswith('http'):
+                                sample_val = val[:50] + "..."
+                                break
+                        if sample_val:
+                            yield f"data: {json.dumps({'status': f'Analisando apontamento: \"{sample_val}\"', 'step': 2})}\n\n"
+                            
                         all_excel_str += f"\n[Arquivo {idx+1}]\n" + df.to_json(orient="records", force_ascii=False)
                         for val in df.values.flatten():
                             if isinstance(val, str):
@@ -347,12 +356,14 @@ def generate_report():
                                         if local: url_to_local[url] = local
                     except: pass
 
-                yield f"data: {json.dumps({'status': 'Preparando imagens para a IA...', 'step': 3})}\n\n"
+                yield f"data: {json.dumps({'status': 'Preparando mídias para visão computacional...', 'step': 3})}\n\n"
                 gemini_files = []
                 media_mapping = "\nMAPEAMENTO DE IMAGENS:\n"
                 for url, local in url_to_local.items():
                     if local.endswith(('.jpeg', '.jpg', '.png', '.webp')):
                         try:
+                            filename = os.path.basename(url).split('?')[0][-20:]
+                            yield f"data: {json.dumps({'status': f'Processando evidência fotográfica... ({filename})', 'step': 3})}\n\n"
                             g_file = client.files.upload(file=local)
                             while g_file.state.name == "PROCESSING":
                                 time.sleep(1)
@@ -361,17 +372,19 @@ def generate_report():
                             media_mapping += f"- {os.path.basename(local)} -> {url}\n"
                         except: pass
 
-                yield f"data: {json.dumps({'status': 'Processando referências e fontes...', 'step': 4})}\n\n"
+                yield f"data: {json.dumps({'status': 'Mapeando referências e fontes normativas...', 'step': 4})}\n\n"
                 all_ref_text = ""
                 base_template = os.path.join(run_folder, "master.docx") if visual_template else None
                 
                 for idx, t in enumerate(template_files):
+                    yield f"data: {json.dumps({'status': f'Extraindo padrões do modelo: {t.filename}', 'step': 4})}\n\n"
                     path = os.path.join(run_folder, f"ref_{idx}_{t.filename}")
                     if not base_template and path.lower().endswith('.docx'): base_template = path
                     all_ref_text += f"\n[Referência {idx+1}]\n" + extract_text(path)
 
                 sources_text = ""
                 for idx, s in enumerate(source_files):
+                    yield f"data: {json.dumps({'status': f'Consultando base técnica: {s.filename}', 'step': 4})}\n\n"
                     path = os.path.join(run_folder, f"src_{idx}_{s.filename}")
                     sources_text += f"\n[Fonte {idx+1}]\n" + extract_text(path)
 
