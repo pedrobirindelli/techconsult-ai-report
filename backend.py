@@ -718,8 +718,15 @@ def format_document_agent():
         # Executar plano localmente
         format_agent.execute_formatting_plan(input_path, plan_steps, output_path)
         
-        # Retornar ID para download
-        return jsonify({"status": "success", "file_id": folder_id})
+        # Retornar o arquivo diretamente com headers de tokens
+        tokens_used = 0
+        if hasattr(response, 'usage_metadata') and hasattr(response.usage_metadata, 'total_token_count'):
+            tokens_used = response.usage_metadata.total_token_count
+
+        response_file = make_response(send_file(output_path, as_attachment=True, download_name="Laudo_Formatado_Jorge.docx"))
+        response_file.headers['X-Tokens-Used'] = str(tokens_used)
+        response_file.headers['Access-Control-Expose-Headers'] = 'X-Tokens-Used'
+        return response_file
         
     except Exception as e:
         print(f"Erro no Format Agent: {e}")

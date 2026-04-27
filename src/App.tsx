@@ -18,6 +18,13 @@ declare global {
       mode?: 'read' | 'readwrite';
       startIn?: 'desktop' | 'documents' | 'downloads' | 'music' | 'pictures' | 'videos';
     }): Promise<FileSystemDirectoryHandle>;
+    showSaveFilePicker(options?: {
+      suggestedName?: string;
+      types?: {
+        description: string;
+        accept: Record<string, string[]>;
+      }[];
+    }): Promise<FileSystemFileHandle>;
   }
 }
 
@@ -108,30 +115,65 @@ export default function App() {
         headers: { 'Authorization': `Bearer ${session?.access_token}` },
         body: formData
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erro no Agente");
       
-      clearInterval(interval);
-      setAgentStatus("Pronto! Baixando arquivo...");
-
-      if (data.tokens_used) {
-        setActualTokens(data.tokens_used);
-        const currentTokens = session?.user?.user_metadata?.total_tokens_used || 0;
-        const newTotal = currentTokens + data.tokens_used;
-        await supabase.auth.updateUser({
-          data: { total_tokens_used: newTotal }
-        });
-        if (session?.user) {
-          session.user.user_metadata = { ...session.user.user_metadata, total_tokens_used: newTotal };
+      if (!res.ok) {
+        const errText = await res.text();
+        try {
+          const errData = JSON.parse(errText);
+          throw new Error(errData.error || "Erro no Agente");
+        } catch {
+          throw new Error("Erro no servidor da IA. Status: " + res.status);
         }
       }
       
-      const downloadRes = await fetch(`/api/download/${data.file_id}?file=output.docx`, {
-        headers: { 'Authorization': `Bearer ${session?.access_token}` }
-      });
-      if (!downloadRes.ok) throw new Error("Erro ao baixar arquivo gerado");
-      const blob = await downloadRes.blob();
-      setAgentResultUrl(window.URL.createObjectURL(blob));
+      clearInterval(interval);
+      setAgentStatus("Pronto! Salvando arquivo...");
+
+      const tokensHeader = res.headers.get('X-Tokens-Used');
+      if (tokensHeader) {
+        const tokensNum = parseInt(tokensHeader, 10);
+        if (!isNaN(tokensNum)) {
+          setActualTokens(tokensNum);
+          const currentTokens = session?.user?.user_metadata?.total_tokens_used || 0;
+          const newTotal = currentTokens + tokensNum;
+          await supabase.auth.updateUser({
+            data: { total_tokens_used: newTotal }
+          });
+          if (session?.user) {
+            session.user.user_metadata = { ...session.user.user_metadata, total_tokens_used: newTotal };
+          }
+        }
+      }
+      
+      const blob = await res.blob();
+      
+      // Solicitar local de salvamento
+      try {
+        if ('showSaveFilePicker' in window) {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: 'Laudo_Formatado_Jorge.docx',
+            types: [{
+              description: 'Microsoft Word Document',
+              accept: { 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'] },
+            }],
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          setAgentResultUrl("saved"); // Apenas para sair do estado de isRunning
+        } else {
+          // Fallback para navegadores sem suporte
+          const url = window.URL.createObjectURL(blob);
+          setAgentResultUrl(url);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'Laudo_Formatado_Jorge.docx';
+          a.click();
+        }
+      } catch (saveErr) {
+        console.log("Usuário cancelou o salvamento do arquivo", saveErr);
+        setAgentResultUrl("cancelled");
+      }
     } catch (e: any) {
       alert(e.message);
     } finally {
