@@ -707,72 +707,84 @@ def format_document_agent():
         output_path = os.path.join(run_folder, "Resultado.docx")
         file.save(input_path)
         
-        # Extrair Mapa Estrutural (JSON de análise profunda do documento)
-        structure_map = format_agent.analyze_document_structure(input_path)
-        context_json = json.dumps(structure_map, ensure_ascii=False)
-        
-        # Para evitar estourar o limite de tokens se o documento for GIGANTE, 
-        # limitamos o tamanho do json para a IA processar (embora Gemini 1.5/2.5 suporte muito mais).
-        if len(context_json) > 150000:
-            context_json = context_json[:150000] + "\n... [TRUNCADO]"
-        
-        sys_inst = (
-            "Você é o Joorrge, um Agente Arquiteto e Especialista em Formatação do Microsoft Word. "
-            "Seu objetivo é ler o prompt do usuário, analisar o MAPA ESTRUTURAL (JSON) do documento "
-            "e mapear quais ações cirúrgicas de formatação devem ser tomadas. "
-            "Você deve retornar EXCLUSIVAMENTE um ARRAY JSON de ações. "
-            "Exemplo válido: "
-            "["
-            "  {\"action\": \"add_cover\", \"params\": {\"title\": \"Meu Laudo\", \"subtitle\": \"Vistoria\", \"author\": \"TechConsult\"}},"
-            "  {\"action\": \"insert_toc\", \"params\": {}},"
-            "  {\"action\": \"replace_toc\", \"params\": {}},"
-            "  {\"action\": \"page_break_before_headings\", \"params\": {}},"
-            "  {\"action\": \"resize_images\", \"params\": {\"width_cm\": 15}},"
-            "  {\"action\": \"format_class\", \"params\": {\"text_class\": \"titulo\", \"color_hex\": \"#FF0000\", \"size_pt\": 16, \"bold\": true, \"italic\": false}},"
-            "  {\"action\": \"format_specific_text\", \"params\": {\"search_text\": \"Risco Crítico\", \"color_hex\": \"#FFFFFF\", \"bg_color_hex\": \"#FF0000\", \"bold\": true}},"
-            "  {\"action\": \"align_component\", \"params\": {\"component\": \"imagem\", \"alignment\": \"center\"}},"
-            "  {\"action\": \"add_signature_block\", \"params\": {\"names\": [\"Pedro Eng\"]}}"
-            "]\n"
-            "Dicas do MAPA ESTRUTURAL:\n"
-            "- 'role' identifica se o trecho é 'title', 'subtitle', 'caption', 'body'. Use isso para inferir como aplicar as formatações.\n"
-            "- Novas ações disponíveis: `resize_images`, `replace_toc`, `page_break_before_headings`.\n"
-            "Gere os parâmetros que melhor atendam ao pedido do usuário."
-        )
-        
-        user_msg = f"MAPA ESTRUTURAL DO DOCX:\n{context_json}\n\nPEDIDO DO USUÁRIO:\n{prompt}"
-        
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=user_msg,
-            config=genai.types.GenerateContentConfig(
-                system_instruction=sys_inst,
-                response_mime_type="application/json"
-            )
-        )
-        
-        import re
-        
-        raw_text = response.text.strip()
-        
-        # Procura por um array JSON dentro do texto
-        match = re.search(r'\[.*\]', raw_text, re.DOTALL)
-        if match:
-            raw_text = match.group(0)
+        def generate_stream():
+            try:
+                yield f"data: {json.dumps({'status': 'Analisando a estrutura do documento original...'})}\n\n"
+                # Extrair Mapa Estrutural
+                structure_map = format_agent.analyze_document_structure(input_path)
+                context_json = json.dumps(structure_map, ensure_ascii=False)
+                
+                if len(context_json) > 150000:
+                    context_json = context_json[:150000] + "\n... [TRUNCADO]"
+                
+                sys_inst = (
+                    "Você é o Joorrge, um Agente Arquiteto e Especialista em Formatação do Microsoft Word. "
+                    "Seu objetivo é ler o prompt do usuário, analisar o MAPA ESTRUTURAL (JSON) do documento "
+                    "e mapear quais ações cirúrgicas de formatação devem ser tomadas. "
+                    "Você deve retornar EXCLUSIVAMENTE um ARRAY JSON de ações. "
+                    "Exemplo válido: "
+                    "["
+                    "  {\"action\": \"add_cover\", \"params\": {\"title\": \"Meu Laudo\", \"subtitle\": \"Vistoria\", \"author\": \"TechConsult\"}},"
+                    "  {\"action\": \"insert_toc\", \"params\": {}},"
+                    "  {\"action\": \"replace_toc\", \"params\": {}},"
+                    "  {\"action\": \"page_break_before_headings\", \"params\": {}},"
+                    "  {\"action\": \"resize_images\", \"params\": {\"width_cm\": 15}},"
+                    "  {\"action\": \"format_class\", \"params\": {\"text_class\": \"titulo\", \"color_hex\": \"#FF0000\", \"size_pt\": 16, \"bold\": true, \"italic\": false}},"
+                    "  {\"action\": \"format_specific_text\", \"params\": {\"search_text\": \"Risco Crítico\", \"color_hex\": \"#FFFFFF\", \"bg_color_hex\": \"#FF0000\", \"bold\": true}},"
+                    "  {\"action\": \"align_component\", \"params\": {\"component\": \"imagem\", \"alignment\": \"center\"}},"
+                    "  {\"action\": \"add_signature_block\", \"params\": {\"names\": [\"Pedro Eng\"]}}"
+                    "]\n"
+                    "Dicas do MAPA ESTRUTURAL:\n"
+                    "- 'role' identifica se o trecho é 'title', 'subtitle', 'caption', 'body'. Use isso para inferir como aplicar as formatações.\n"
+                    "- Novas ações disponíveis: `resize_images`, `replace_toc`, `page_break_before_headings`.\n"
+                    "Gere os parâmetros que melhor atendam ao pedido do usuário."
+                )
+                
+                user_msg = f"MAPA ESTRUTURAL DO DOCX:\n{context_json}\n\nPEDIDO DO USUÁRIO:\n{prompt}"
+                
+                yield f"data: {json.dumps({'status': 'A IA Especialista está processando a estratégia (pode levar alguns minutos)...'})}\n\n"
+                
+                response_stream = client.models.generate_content(
+                    model='gemini-2.5-pro',
+                    contents=user_msg,
+                    config=genai.types.GenerateContentConfig(
+                        system_instruction=sys_inst,
+                        response_mime_type="application/json"
+                    ),
+                    stream=True
+                )
+                
+                import re
+                raw_text = ""
+                for chunk in response_stream:
+                    if chunk.text:
+                        raw_text += chunk.text
+                        yield f"data: {json.dumps({'ping': True})}\n\n"
+                
+                raw_text = raw_text.strip()
+                match = re.search(r'\[.*\]', raw_text, re.DOTALL)
+                if match:
+                    raw_text = match.group(0)
+                    
+                plan_steps = json.loads(raw_text.strip())
+                
+                yield f"data: {json.dumps({'status': 'Aplicando modificações ao arquivo Word...'})}\n\n"
+                format_agent.execute_formatting_plan(input_path, plan_steps, output_path)
+                
+                # Calcular tokens aproximados (streaming não traz usage_metadata facilmente)
+                tokens_used = len(context_json) // 4 + len(raw_text) // 4
+                
+                yield f"data: {json.dumps({'status': 'Concluído', 'file_id': folder_id, 'tokens_used': tokens_used})}\n\n"
             
-        plan_steps = json.loads(raw_text.strip())
-        
-        # Executar plano localmente
-        format_agent.execute_formatting_plan(input_path, plan_steps, output_path)
-        
-        # Retornar o arquivo diretamente com headers de tokens
-        tokens_used = 0
-        if hasattr(response, 'usage_metadata') and hasattr(response.usage_metadata, 'total_token_count'):
-            tokens_used = response.usage_metadata.total_token_count
+            except Exception as e:
+                print(f"Erro interno no SSE: {e}")
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
-        response_file = make_response(send_file(output_path, as_attachment=True, download_name="Laudo_Formatado_Jorge.docx"))
-        response_file.headers['X-Tokens-Used'] = str(tokens_used)
-        response_file.headers['Access-Control-Expose-Headers'] = 'X-Tokens-Used'
-        return response_file
+        resp = Response(stream_with_context(generate_stream()), mimetype='text/event-stream')
+        resp.headers['X-Accel-Buffering'] = 'no'
+        resp.headers['Cache-Control'] = 'no-cache'
+        resp.headers['Connection'] = 'keep-alive'
+        return resp
         
     except Exception as e:
         print(f"Erro no Format Agent: {e}")

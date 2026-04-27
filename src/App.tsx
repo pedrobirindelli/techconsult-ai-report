@@ -146,20 +146,6 @@ export default function App() {
     setActualTokens(null);
     setAgentStatus("Lendo arquivo bruto...");
     
-    const phrases = [
-      "Lendo arquivo bruto...",
-      "Jorge está analisando suas instruções...",
-      "Mapeando regras de formatação...",
-      "Ajustando fontes e alinhamentos...",
-      "Montando o documento final...",
-      "Ajeitando a gravata, quase pronto..."
-    ];
-    let phraseIndex = 0;
-    const interval = setInterval(() => {
-      phraseIndex = (phraseIndex + 1) % phrases.length;
-      setAgentStatus(phrases[phraseIndex]);
-    }, 4000);
-
     try {
       const formData = new FormData();
       formData.append('file', agentFile);
@@ -182,37 +168,63 @@ export default function App() {
         throw new Error(errData.error || "Erro no Agente");
       }
       
-      clearInterval(interval);
-      setAgentStatus("Pronto! Salvando arquivo...");
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) throw new Error("Stream não suportado pelo navegador.");
 
-      const tokensHeader = res.headers.get('X-Tokens-Used');
-      if (tokensHeader) {
-        const tokensNum = parseInt(tokensHeader, 10);
-        if (!isNaN(tokensNum)) {
-          setActualTokens(tokensNum);
-          const currentTokens = session?.user?.user_metadata?.total_tokens_used || 0;
-          const newTotal = currentTokens + tokensNum;
-          await supabase.auth.updateUser({
-            data: { total_tokens_used: newTotal }
-          });
-          if (session?.user) {
-            session.user.user_metadata = { ...session.user.user_metadata, total_tokens_used: newTotal };
+      let isDone = false;
+      while (!isDone) {
+        const { value, done } = await reader.read();
+        isDone = done;
+        if (value) {
+          const chunkStr = decoder.decode(value, { stream: !done });
+          const lines = chunkStr.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.substring(6));
+                if (data.error) {
+                  throw new Error(data.error);
+                }
+                if (data.status) {
+                  setAgentStatus(data.status);
+                }
+                if (data.file_id) {
+                  const downloadRes = await fetch(`/api/download/${data.file_id}`, {
+                    headers: { 'Authorization': `Bearer ${session?.access_token}` }
+                  });
+                  if (!downloadRes.ok) throw new Error("Erro ao baixar arquivo formatado");
+                  const blob = await downloadRes.blob();
+                  const url = window.URL.createObjectURL(blob);
+                  
+                  if (data.tokens_used) {
+                    setActualTokens(data.tokens_used);
+                    const currentTokens = session?.user?.user_metadata?.total_tokens_used || 0;
+                    const newTotal = currentTokens + data.tokens_used;
+                    await supabase.auth.updateUser({
+                      data: { total_tokens_used: newTotal }
+                    });
+                    if (session?.user) {
+                      session.user.user_metadata = { ...session.user.user_metadata, total_tokens_used: newTotal };
+                    }
+                  }
+                  
+                  setAgentResultUrl(url);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'Laudo_Formatado_Jorge.docx';
+                  a.click();
+                }
+              } catch (parseErr) {
+                // ignorar erros de parse JSON incompleto no stream
+              }
+            }
           }
         }
       }
-      
-      const blob = await res.blob();
-      
-      const url = URL.createObjectURL(blob);
-      setAgentResultUrl(url);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'Laudo_Formatado_Jorge.docx';
-      a.click();
     } catch (e: any) {
       alert(e.message);
     } finally {
-      clearInterval(interval);
       setAgentStatus(null);
       setIsAgentRunning(false);
     }
