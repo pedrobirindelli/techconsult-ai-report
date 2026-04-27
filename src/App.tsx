@@ -438,13 +438,24 @@ export default function App() {
           {!mustChangePassword && (
             <button 
               onClick={async () => {
-                const newPass = prompt("Digite sua nova senha:");
-                if (newPass && newPass.length >= 6) {
-                  const { error } = await supabase.auth.updateUser({ password: newPass });
-                  if (error) alert("Erro ao alterar senha: " + error.message);
-                  else alert("Senha alterada com sucesso!");
-                } else if (newPass) {
+                const newPass = prompt("Digite sua nova senha (mínimo 6 caracteres):");
+                if (newPass === null) return; // Usuário cancelou
+                if (newPass.length < 6) {
                   alert("A senha deve ter pelo menos 6 caracteres.");
+                  return;
+                }
+                
+                try {
+                  const { error } = await supabase.auth.updateUser({ password: newPass });
+                  if (error) {
+                    console.error("Erro updateUser:", error);
+                    alert("Erro ao alterar senha: " + error.message);
+                  } else {
+                    alert("Senha alterada com sucesso!");
+                  }
+                } catch (err: any) {
+                  console.error("Exceção updateUser:", err);
+                  alert("Erro inesperado: " + err.message);
                 }
               }}
               className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all"

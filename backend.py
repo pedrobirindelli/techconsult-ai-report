@@ -454,6 +454,59 @@ def admin_create_user():
         return jsonify(response.json())
     return jsonify({"error": response.text}), response.status_code
 
+@app.route('/api/admin/users/<user_id>', methods=['DELETE'])
+@require_admin
+def admin_delete_user(user_id):
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        return jsonify({"error": "SUPABASE_SERVICE_ROLE_KEY não configurado no backend."}), 500
+        
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}"
+    }
+    
+    response = requests.delete(f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}", headers=headers)
+    if response.status_code in [200, 204]:
+        return jsonify({"success": True})
+    return jsonify({"error": response.text}), response.status_code
+
+@app.route('/api/admin/users/<user_id>/reset', methods=['PUT'])
+@require_admin
+def admin_reset_user_password(user_id):
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        return jsonify({"error": "SUPABASE_SERVICE_ROLE_KEY não configurado no backend."}), 500
+        
+    data = request.json
+    new_password = data.get('password')
+    if not new_password:
+        return jsonify({"error": "A nova senha é obrigatória"}), 400
+        
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    # 1. Obter os metadados atuais do usuário
+    get_res = requests.get(f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}", headers=headers)
+    if get_res.status_code != 200:
+        return jsonify({"error": "Usuário não encontrado"}), 404
+        
+    user_data = get_res.json()
+    metadata = user_data.get("user_metadata", {})
+    metadata["must_change_password"] = True
+    
+    payload = {
+        "password": new_password,
+        "user_metadata": metadata
+    }
+    
+    # 2. Atualizar a senha e os metadados
+    response = requests.put(f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}", headers=headers, json=payload)
+    if response.status_code in [200, 204]:
+        return jsonify({"success": True})
+    return jsonify({"error": response.text}), response.status_code
+
 import tempfile
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
