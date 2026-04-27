@@ -489,11 +489,31 @@ def generate_report():
                 parsed_json = json.loads(raw_text.strip())
                 
                 final_doc = os.path.join(run_folder, "Resultado.docx")
-                reconstruct_doc(parsed_json, base_template, final_doc, run_folder)
                 
-                final_doc_obj = docx.Document(final_doc)
-                if len(final_doc_obj.paragraphs) <= 1 and not final_doc_obj.tables:
-                    raise Exception(f"A IA gerou um formato inesperado que resultou num laudo vazio. Retorno cru da IA (copie isto e envie ao suporte): {raw_text[:2000]}")
+                q_doc = queue.Queue()
+                def build_doc():
+                    try:
+                        reconstruct_doc(parsed_json, base_template, final_doc, run_folder)
+                        
+                        final_doc_obj = docx.Document(final_doc)
+                        if len(final_doc_obj.paragraphs) <= 1 and not final_doc_obj.tables:
+                            raise Exception(f"A IA gerou um formato inesperado que resultou num laudo vazio. Retorno cru da IA (copie isto e envie ao suporte): {raw_text[:2000]}")
+                        q_doc.put(("done", None))
+                    except Exception as e:
+                        q_doc.put(("error", e))
+
+                t_doc = threading.Thread(target=build_doc)
+                t_doc.start()
+
+                while True:
+                    try:
+                        msg_type, doc_data = q_doc.get(timeout=10)
+                        if msg_type == "done":
+                            break
+                        elif msg_type == "error":
+                            raise doc_data
+                    except queue.Empty:
+                        yield ": keep-alive\n\n"
                 
                 yield f"data: {json.dumps({'status': 'Concluído!', 'step': 7, 'file_id': folder_id, 'tokens_used': used_tokens})}\n\n"
             except Exception as e:
