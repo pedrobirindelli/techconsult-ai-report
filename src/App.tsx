@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FileSpreadsheet, FileText, Upload, Settings, Play, Brain, BrainCircuit, FileSignature, DollarSign, Download, CheckCircle2, Save, Trash2, FilePlus, LogOut, FolderOpen } from 'lucide-react'
+import { FileSpreadsheet, FileText, Upload, Settings, Play, Brain, BrainCircuit, FileSignature, DollarSign, Download, CheckCircle2, Save, Trash2, FilePlus, LogOut, FolderOpen, Users } from 'lucide-react'
 import { supabase } from './lib/supabaseClient'
 import Login from './components/Login'
 import { ForcePasswordChange } from './components/ForcePasswordChange'
@@ -422,14 +422,14 @@ export default function App() {
             onClick={() => setActiveTab('knowledge')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'knowledge' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}
           >
-            <Settings size={18} /> Comportamento
+            <Brain size={18} /> Comportamento
           </button>
           {isMasterAdmin && (
             <button 
               onClick={() => setActiveTab('admin')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'admin' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800'}`}
             >
-              <Settings size={18} /> Gestão de Usuários
+              <Users size={18} /> Gestão de Usuários
             </button>
           )}
         </nav>
