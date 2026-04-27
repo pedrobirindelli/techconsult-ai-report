@@ -508,7 +508,7 @@ export default function App() {
               
               <div className="flex items-center gap-2">
                 <button onClick={handleSelectFolder} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-lg font-bold text-xs transition-all flex items-center gap-2 border border-slate-200">
-                  <FolderOpen size={14} /> ABRIR PASTA
+                  <FolderOpen size={14} /> ABRIR PROJETO
                 </button>
                 <button onClick={handleNewProject} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-lg font-bold text-xs transition-all flex items-center gap-2 border border-slate-200">
                   <FilePlus size={14} /> NOVO
