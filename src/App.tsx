@@ -146,7 +146,8 @@ export default function App() {
         // Reconstruir estado a partir da pasta
         await loadProjectFromFolder(handle, config);
       } catch (e) {
-        console.log("Pasta vazia ou sem configuração. Iniciando como novo projeto.");
+        alert("O arquivo project_config.json não foi encontrado nesta pasta. Verifique se você selecionou a pasta correta do projeto.");
+        console.log("Pasta vazia ou sem configuração.");
       }
     } catch (err) {
       console.error("Usuário cancelou a seleção de pasta", err);
@@ -508,7 +509,7 @@ export default function App() {
               
               <div className="flex items-center gap-2">
                 <button onClick={handleSelectFolder} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-lg font-bold text-xs transition-all flex items-center gap-2 border border-slate-200">
-                  <FolderOpen size={14} /> ABRIR PROJETO
+                  <FolderOpen size={14} /> ABRIR PASTA DO PROJETO
                 </button>
                 <button onClick={handleNewProject} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-lg font-bold text-xs transition-all flex items-center gap-2 border border-slate-200">
                   <FilePlus size={14} /> NOVO
