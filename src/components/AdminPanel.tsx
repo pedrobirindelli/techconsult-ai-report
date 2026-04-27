@@ -104,7 +104,7 @@ export function AdminPanel() {
       }
 
       setSuccess(`Usuário ${email} foi excluído.`);
-      fetchUsers();
+      setUsers(prev => prev.filter(u => u.id !== userId));
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -145,7 +145,18 @@ export function AdminPanel() {
       }
 
       setSuccess(`Senha de ${email} alterada com sucesso para "${newPass}".`);
-      fetchUsers();
+      setUsers(prev => prev.map(u => {
+        if (u.id === userId) {
+          return {
+            ...u,
+            user_metadata: {
+              ...u.user_metadata,
+              raw_password: newPass
+            }
+          };
+        }
+        return u;
+      }));
     } catch (err: any) {
       setError(err.message);
     } finally {
