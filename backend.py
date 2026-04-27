@@ -376,7 +376,7 @@ def generate_report():
                     sources_text += f"\n[Fonte {idx+1}]\n" + extract_text(path)
 
                 yield f"data: {json.dumps({'status': 'Analisando dados com Gemini 2.5 Pro (pode demorar alguns minutos)...', 'step': 5})}\n\n"
-                sys_inst = f"Engenheiro Civil Perito. Retorne APENAS JSON de blocos (heading1, paragraph, image, table). Regras: {rules}"
+                sys_inst = f"Engenheiro Civil Perito. Você deve OBRIGATORIAMENTE retornar APENAS um ARRAY JSON de objetos. Formato EXATO exigido: [{{'type': 'heading1'|'paragraph'|'table'|'image', 'text': 'conteudo aqui', 'headers': [], 'rows': []}}]. NUNCA traduza ou mude o nome das chaves 'type' e 'text'. Regras: {rules}"
                 user_prompt = f"REFERÊNCIAS:\n{all_ref_text[:15000]}\n\nFONTES:\n{sources_text[:15000]}\n\nDADOS:\n{all_excel_str}\n\n{media_mapping}"
                 
                 response = client.models.generate_content(
@@ -396,6 +396,10 @@ def generate_report():
                 
                 final_doc = os.path.join(run_folder, "Resultado.docx")
                 reconstruct_doc(parsed_json, base_template, final_doc, run_folder)
+                
+                final_doc_obj = docx.Document(final_doc)
+                if len(final_doc_obj.paragraphs) <= 1 and not final_doc_obj.tables:
+                    raise Exception(f"A IA gerou um formato inesperado que resultou num laudo vazio. Retorno cru da IA (copie isto e envie ao suporte): {raw_text[:2000]}")
                 
                 yield f"data: {json.dumps({'status': 'Concluído!', 'step': 7, 'file_id': folder_id})}\n\n"
             except Exception as e:
