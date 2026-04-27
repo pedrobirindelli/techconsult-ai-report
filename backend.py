@@ -7,6 +7,8 @@ import docx
 import pandas as pd
 import requests
 import jwt
+import logging
+import format_agent
 from flask import Flask, request, jsonify, send_file, Response, stream_with_context
 from flask_cors import CORS
 from google import genai
@@ -607,5 +609,74 @@ def admin_reset_user_password(user_id):
     return jsonify({"error": response.text}), response.status_code
 
 import tempfile
+@app.route('/agent/format', methods=['POST'])
+@require_auth
+def format_document_agent():
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "Nenhum arquivo enviado"}), 400
+        
+        file = request.files['file']
+        prompt = request.form.get('prompt', '')
+        
+        folder_id = uuid.uuid4().hex
+        run_folder = os.path.join(UPLOAD_FOLDER, folder_id)
+        os.makedirs(run_folder, exist_ok=True)
+        
+        input_path = os.path.join(run_folder, "input.docx")
+        output_path = os.path.join(run_folder, "output.docx")
+        file.save(input_path)
+        
+        # Ler conteúdo básico para a IA ter contexto
+        context_text = extract_text(input_path)[:15000]
+        
+        sys_inst = (
+            "Você é um Agente Especialista em Formatação do Microsoft Word. "
+            "Seu objetivo é ler o prompt do usuário e mapear quais ações de formatação devem ser tomadas. "
+            "Você deve retornar EXCLUSIVAMENTE um ARRAY JSON. "
+            "Exemplo válido: "
+            "["
+            "  {\"action\": \"add_cover\", \"params\": {\"title\": \"Meu Laudo\", \"subtitle\": \"Vistoria\", \"author\": \"TechConsult\"}},"
+            "  {\"action\": \"insert_toc\", \"params\": {}},"
+            "  {\"action\": \"format_class\", \"params\": {\"text_class\": \"titulo\", \"color_hex\": \"#FF0000\", \"size_pt\": 16, \"bold\": true, \"italic\": false}},"
+            "  {\"action\": \"format_specific_text\", \"params\": {\"search_text\": \"Risco Crítico\", \"color_hex\": \"#FFFFFF\", \"bg_color_hex\": \"#FF0000\", \"bold\": true}},"
+            "  {\"action\": \"align_component\", \"params\": {\"component\": \"imagem\", \"alignment\": \"center\"}},"
+            "  {\"action\": \"align_component\", \"params\": {\"component\": \"titulo\", \"alignment\": \"center\"}},"
+            "  {\"action\": \"add_signature_block\", \"params\": {\"names\": [\"Pedro Eng\", \"João Perito\"]}}"
+            "]\n"
+            "Valores para `text_class`: 'titulo', 'subtitulo', 'texto', 'legenda'. "
+            "Valores para `component`: 'texto', 'imagem', 'tabela', 'titulo'. "
+            "Valores para `alignment`: 'left', 'center', 'right', 'justify'. "
+            "Gere os parâmetros que melhor atendam ao pedido do usuário."
+        )
+        
+        user_msg = f"CONTEXTO DO DOCX:\n{context_text}\n\nPEDIDO DO USUÁRIO:\n{prompt}"
+        
+        response = client.models.generate_content(
+            model='gemini-2.5-pro',
+            contents=user_msg,
+            config=genai.types.GenerateContentConfig(
+                system_instruction=sys_inst,
+                response_mime_type="application/json"
+            )
+        )
+        
+        raw_text = response.text.strip()
+        if raw_text.startswith("```json"): raw_text = raw_text[7:]
+        elif raw_text.startswith("```"): raw_text = raw_text[3:]
+        if raw_text.endswith("```"): raw_text = raw_text[:-3]
+        
+        plan_steps = json.loads(raw_text.strip())
+        
+        # Executar plano localmente
+        format_agent.execute_formatting_plan(input_path, plan_steps, output_path)
+        
+        # Retornar ID para download
+        return jsonify({"status": "success", "file_id": folder_id})
+        
+    except Exception as e:
+        print(f"Erro no Format Agent: {e}")
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

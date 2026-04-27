@@ -26,6 +26,12 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [knowledgeRules, setKnowledgeRules] = useState("Sempre utilize os termos técnicos da ABNT NBR 13752. Nunca utilize o adjetivo ruim, substitua por deteriorado ou com anomalias críticas.")
   
+  // Agent State
+  const [agentFile, setAgentFile] = useState<File | null>(null)
+  const [agentPrompt, setAgentPrompt] = useState("Ex: Gere uma capa com o título Laudo e autor Pedro. Pinte todos os subtítulos de azul e centralize as imagens.")
+  const [isAgentRunning, setIsAgentRunning] = useState(false)
+  const [agentResultUrl, setAgentResultUrl] = useState<string | null>(null)
+  
   // States para arquivos do projeto
   const [excelFiles, setExcelFiles] = useState<AppFile[]>([])
   const [templateFiles, setTemplateFiles] = useState<AppFile[]>([])
@@ -62,7 +68,40 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (session) {
+    const handleAgentSubmit = async () => {
+    if (!agentFile) {
+      alert("Selecione um arquivo Word primeiro.");
+      return;
+    }
+    setIsAgentRunning(true);
+    setAgentResultUrl(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', agentFile);
+      formData.append('prompt', agentPrompt);
+
+      const res = await fetch('/agent/format', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session?.access_token}` },
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro no Agente");
+      
+      const downloadRes = await fetch(`/api/download/${data.file_id}?file=output.docx`, {
+        headers: { 'Authorization': `Bearer ${session?.access_token}` }
+      });
+      if (!downloadRes.ok) throw new Error("Erro ao baixar arquivo gerado");
+      const blob = await downloadRes.blob();
+      setAgentResultUrl(window.URL.createObjectURL(blob));
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setIsAgentRunning(false);
+    }
+  }
+
+  if (session) {
       fetchRules()
     }
   }, [session])
@@ -485,14 +524,24 @@ export default function App() {
           >
             <Brain size={18} /> Comportamento
           </button>
-          {isMasterAdmin && (
-            <button 
-              onClick={() => setActiveTab('admin')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'admin' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800'}`}
-            >
-              <Users size={18} /> Gestão de Usuários
-            </button>
-          )}
+            {session.user.email === 'pedrobirindelli@gmail.com' && (
+              <>
+                <button
+                  onClick={() => setActiveTab('admin')}
+                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'admin' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
+                >
+                  <Users size={20} />
+                  <span>Gestão de Usuários</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('agente')}
+                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'agente' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
+                >
+                  <BrainCircuit size={20} />
+                  <span>Agente de Formatação</span>
+                </button>
+              </>
+            )}
         </nav>
 
         <div className="p-4 border-t border-slate-800 space-y-2">
@@ -710,7 +759,109 @@ export default function App() {
         {activeTab === 'admin' && isMasterAdmin && (
           <AdminPanel />
         )}
-      </main>
+          {activeTab === 'agente' && session.user.email === 'pedrobirindelli@gmail.com' && (
+            <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
+              <div className="bg-gradient-to-br from-indigo-900 to-purple-900 rounded-2xl p-8 text-white shadow-xl">
+                <div className="flex items-center gap-3 mb-4">
+                  <BrainCircuit className="w-8 h-8 text-indigo-300" />
+                  <h1 className="text-2xl font-bold">Agente Especialista em Formatação</h1>
+                </div>
+                <p className="text-indigo-100 opacity-90 max-w-2xl text-sm leading-relaxed">
+                  Faça o upload do laudo bruto em Word e forneça instruções em linguagem natural. O Agente de IA irá processar as regras, formatar textos, aplicar alinhamentos, adicionar elementos (capa, índice) e gerar a versão final para download sem intervenção manual.
+                </p>
+              </div>
+              
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+                <div className="grid md:grid-cols-2 gap-8">
+                  
+                  {/* Arquivo Input */}
+                  <div className="space-y-4">
+                    <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+                      <FileText size={18} className="text-indigo-500" />
+                      1. Laudo Original (Word)
+                    </h3>
+                    <label className="border-2 border-dashed border-indigo-200 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-indigo-50 hover:border-indigo-400 transition-colors group h-40">
+                      <Upload size={24} className="text-indigo-400 group-hover:text-indigo-600 mb-2 transition-colors" />
+                      <span className="text-sm text-indigo-900 font-medium">{agentFile ? agentFile.name : 'Selecionar .docx'}</span>
+                      <input 
+                        type="file" 
+                        accept=".docx"
+                        className="hidden" 
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            setAgentFile(e.target.files[0])
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+
+                  {/* Prompt */}
+                  <div className="space-y-4">
+                    <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+                      <Settings size={18} className="text-indigo-500" />
+                      2. Instruções de Formatação (Prompt)
+                    </h3>
+                    <textarea 
+                      className="w-full h-40 border border-slate-200 rounded-xl p-4 text-sm resize-none focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700 bg-slate-50"
+                      value={agentPrompt}
+                      onChange={(e) => setAgentPrompt(e.target.value)}
+                      placeholder="Descreva as alterações. Ex: Coloque os títulos com fonte Arial 16 em negrito azul. Adicione uma capa com título 'Laudo Técnico' e autor 'Pedro'. Alinhe imagens no centro."
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-8 flex flex-col items-center border-t border-slate-100 pt-8">
+                  {!isAgentRunning && !agentResultUrl && (
+                    <button 
+                      onClick={handleAgentSubmit}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-10 rounded-xl shadow-lg shadow-indigo-600/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-3"
+                    >
+                      <BrainCircuit size={20} />
+                      EXECUTAR AGENTE DE FORMATAÇÃO
+                    </button>
+                  )}
+
+                  {isAgentRunning && (
+                    <div className="flex flex-col items-center justify-center py-6 text-indigo-600 animate-pulse">
+                      <Loader2 className="w-10 h-10 animate-spin mb-4" />
+                      <p className="font-medium text-lg">A IA está processando as instruções e manipulando o Word...</p>
+                      <p className="text-sm opacity-70 mt-2">Isso pode levar cerca de 1 minuto.</p>
+                    </div>
+                  )}
+
+                  {agentResultUrl && (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 w-full max-w-lg text-center flex flex-col items-center gap-4">
+                      <CheckCircle2 className="w-12 h-12 text-emerald-500" />
+                      <div>
+                        <h3 className="text-lg font-bold text-emerald-900">Documento Formatado com Sucesso!</h3>
+                        <p className="text-sm text-emerald-700">As instruções foram aplicadas pelo Agente Especialista.</p>
+                      </div>
+                      <div className="flex gap-4 w-full mt-2">
+                        <a 
+                          href={agentResultUrl} 
+                          download="Laudo_Formatado_Agente.docx" 
+                          className="flex-1 bg-emerald-600 text-white px-6 py-3 rounded-lg shadow font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Download size={18} /> BAIXAR WORD
+                        </a>
+                        <button 
+                          onClick={() => {
+                            setAgentResultUrl(null);
+                            setAgentFile(null);
+                          }}
+                          className="px-6 py-3 border border-slate-300 text-slate-600 rounded-lg font-medium hover:bg-slate-50 transition-colors"
+                        >
+                          Novo
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </main>
     </div>
   )
 }
