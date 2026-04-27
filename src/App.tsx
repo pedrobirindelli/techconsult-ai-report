@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FileSpreadsheet, FileText, Upload, Settings, Play, Brain, BrainCircuit, FileSignature, DollarSign, Download, CheckCircle2, Save, Trash2, FilePlus, LogOut, FolderOpen, Users, Loader2 } from 'lucide-react'
+import { FileSpreadsheet, FileText, Upload, Settings, Play, Brain, BrainCircuit, FileSignature, DollarSign, Download, CheckCircle2, Save, Trash2, FilePlus, LogOut, FolderOpen, Users, Loader2, Smile } from 'lucide-react'
 import { supabase } from './lib/supabaseClient'
 import Login from './components/Login'
 import { ForcePasswordChange } from './components/ForcePasswordChange'
@@ -537,8 +537,8 @@ export default function App() {
                   onClick={() => setActiveTab('agente')}
                   className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'agente' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
-                  <BrainCircuit size={20} />
-                  <span>Agente de Formatação</span>
+                  <Smile size={20} />
+                  <span>Joorrge</span>
                 </button>
               </>
             )}

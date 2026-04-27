@@ -671,7 +671,7 @@ def format_document_agent():
         os.makedirs(run_folder, exist_ok=True)
         
         input_path = os.path.join(run_folder, "input.docx")
-        output_path = os.path.join(run_folder, "output.docx")
+        output_path = os.path.join(run_folder, "Resultado.docx")
         file.save(input_path)
         
         # Ler conteúdo básico para a IA ter contexto
