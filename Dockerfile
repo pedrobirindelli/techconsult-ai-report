@@ -22,9 +22,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend files
 COPY backend.py .
-COPY reconstructor.py .
-COPY core_processor.py .
-COPY .env .
 
 # Copy built frontend from Stage 1
 COPY --from=build-frontend /app/dist ./dist
