@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { ShieldCheck, UserPlus, Users, Loader2, KeyRound, Mail, User, Trash2, RefreshCw } from 'lucide-react';
+import { ShieldCheck, UserPlus, Users, Loader2, KeyRound, Mail, User, Trash2 } from 'lucide-react';
 
 export function AdminPanel() {
   const [users, setUsers] = useState<any[]>([]);
@@ -9,12 +9,7 @@ export function AdminPanel() {
   const [success, setSuccess] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // Master Password Form State
-  const [masterPassword, setMasterPassword] = useState('');
-  const [masterConfirm, setMasterConfirm] = useState('');
-  const [masterLoading, setMasterLoading] = useState(false);
-  const [masterSuccess, setMasterSuccess] = useState('');
-  const [masterError, setMasterError] = useState('');
+  const [error, setError] = useState('');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -170,64 +165,6 @@ export function AdminPanel() {
         </div>
       </div>
 
-      {/* Master Password Change Section */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-            <KeyRound className="w-5 h-5 text-indigo-500" />
-            Alterar Minha Senha (Master)
-          </h2>
-          <p className="text-sm text-slate-500 mt-1">Atualize a sua própria senha de administrador do sistema.</p>
-          {masterError && <p className="text-red-500 text-sm mt-2 font-medium">{masterError}</p>}
-          {masterSuccess && <p className="text-emerald-600 text-sm mt-2 font-medium">{masterSuccess}</p>}
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="password"
-            placeholder="Nova senha (mín. 6)"
-            value={masterPassword}
-            onChange={(e) => setMasterPassword(e.target.value)}
-            className="w-full md:w-auto bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500/50 outline-none"
-          />
-          <input
-            type="password"
-            placeholder="Confirmar senha"
-            value={masterConfirm}
-            onChange={(e) => setMasterConfirm(e.target.value)}
-            className="w-full md:w-auto bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500/50 outline-none"
-          />
-          <button
-            onClick={async () => {
-              setMasterError('');
-              setMasterSuccess('');
-              if (masterPassword.length < 6) {
-                setMasterError('A senha deve ter no mínimo 6 caracteres.');
-                return;
-              }
-              if (masterPassword !== masterConfirm) {
-                setMasterError('As senhas não coincidem.');
-                return;
-              }
-              setMasterLoading(true);
-              try {
-                const { error } = await supabase.auth.updateUser({ password: masterPassword });
-                if (error) throw error;
-                setMasterSuccess('Senha alterada com sucesso!');
-                setMasterPassword('');
-                setMasterConfirm('');
-              } catch (err: any) {
-                setMasterError(err.message || 'Erro ao alterar a senha.');
-              } finally {
-                setMasterLoading(false);
-              }
-            }}
-            disabled={masterLoading || !masterPassword || !masterConfirm}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-xl shadow-sm flex items-center justify-center gap-2 transition-all disabled:opacity-70 text-sm whitespace-nowrap"
-          >
-            {masterLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Atualizar'}
-          </button>
-        </div>
-      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
