@@ -360,10 +360,10 @@ def generate_report():
                 gemini_files = []
                 media_mapping = "\nMAPEAMENTO DE IMAGENS:\n"
                 for url, local in url_to_local.items():
-                    if local.endswith(('.jpeg', '.jpg', '.png', '.webp')):
+                    if local.lower().endswith(('.jpeg', '.jpg', '.png', '.webp', '.mp3', '.m4a', '.wav', '.ogg', '.mp4', '.avi', '.mov')):
                         try:
                             filename = os.path.basename(url).split('?')[0][-20:]
-                            yield f"data: {json.dumps({'status': f'Processando evidência fotográfica... ({filename})', 'step': 3})}\n\n"
+                            yield f"data: {json.dumps({'status': f'Processando evidência de campo... ({filename})', 'step': 3})}\n\n"
                             g_file = client.files.upload(file=local)
                             while g_file.state.name == "PROCESSING":
                                 time.sleep(1)
@@ -392,15 +392,20 @@ def generate_report():
                 sys_inst = f"Engenheiro Civil Perito. Você deve OBRIGATORIAMENTE retornar APENAS um ARRAY JSON de objetos. Formato EXATO exigido: [{{'type': 'heading1'|'paragraph'|'table'|'image', 'text': 'conteudo aqui', 'headers': [], 'rows': []}}]. NUNCA traduza ou mude o nome das chaves 'type' e 'text'. Regras: {rules}"
                 user_prompt = f"REFERÊNCIAS:\n{all_ref_text[:15000]}\n\nFONTES:\n{sources_text[:15000]}\n\nDADOS:\n{all_excel_str}\n\n{media_mapping}"
                 
-                response = client.models.generate_content(
+                response = client.models.generate_content_stream(
                     model='gemini-2.5-pro',
                     contents=gemini_files + [user_prompt],
                     config=genai.types.GenerateContentConfig(system_instruction=sys_inst, response_mime_type="application/json")
                 )
                 
+                raw_text = ""
+                for chunk in response:
+                    raw_text += chunk.text
+                    yield f"data: {json.dumps({'status': f'Analisando dados e gerando texto (recebidos {len(raw_text)} bytes)...', 'step': 5})}\n\n"
+                
                 yield f"data: {json.dumps({'status': 'Montando documento Word...', 'step': 6})}\n\n"
                 
-                raw_text = response.text.strip()
+                raw_text = raw_text.strip()
                 if raw_text.startswith("```json"): raw_text = raw_text[7:]
                 elif raw_text.startswith("```"): raw_text = raw_text[3:]
                 if raw_text.endswith("```"): raw_text = raw_text[:-3]
