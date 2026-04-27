@@ -4,6 +4,55 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 import re
+import json
+
+def analyze_document_structure(file_path):
+    doc = docx.Document(file_path)
+    structure = []
+    
+    # Iterate over document body to preserve order
+    for i, child in enumerate(doc.element.body):
+        if child.tag.endswith('p'):
+            from docx.text.paragraph import Paragraph
+            para = Paragraph(child, doc)
+            text = para.text.strip()
+            
+            has_image = 'w:drawing' in child.xml or 'v:imagedata' in child.xml
+            style_name = para.style.name if para.style else "Normal"
+            
+            inferred_role = "body"
+            if style_name.startswith("Heading 1"): inferred_role = "title"
+            elif style_name.startswith("Heading"): inferred_role = "subtitle"
+            elif style_name == "Caption" or (len(text) < 100 and ('figura' in text.lower() or 'foto' in text.lower())):
+                inferred_role = "caption"
+            
+            if text or has_image:
+                structure.append({
+                    "id": f"elem_{i}",
+                    "type": "image_container" if has_image else "paragraph",
+                    "role": inferred_role,
+                    "style": style_name,
+                    "text": text[:200] + "..." if len(text) > 200 else text,
+                })
+                
+        elif child.tag.endswith('tbl'):
+            from docx.table import Table
+            table = Table(child, doc)
+            sample = ""
+            if len(table.rows) > 0:
+                try:
+                    sample = " | ".join(c.text.strip() for c in table.rows[0].cells[:3])
+                except: pass
+            structure.append({
+                "id": f"elem_{i}",
+                "type": "table",
+                "rows": len(table.rows),
+                "cols": len(table.columns),
+                "sample_header": sample
+            })
+            
+    return structure
+
 
 def set_font(run, font_name, size_pt, color_hex, bold, italic):
     if font_name:
@@ -140,6 +189,31 @@ def add_signature_block(doc, names):
         p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
         doc.add_paragraph("\n")
 
+def resize_images(doc, width_cm=None, height_cm=None):
+    for shape in doc.inline_shapes:
+        try:
+            if width_cm: shape.width = Cm(width_cm)
+            if height_cm: shape.height = Cm(height_cm)
+        except: pass
+
+def page_break_before_headings(doc):
+    for para in doc.paragraphs:
+        if para.style and para.style.name.startswith('Heading 1'):
+            para.insert_paragraph_before("").add_run().add_break(docx.enum.text.WD_BREAK.PAGE)
+
+def replace_toc(doc):
+    # Remove old index paragraphs
+    for para in list(doc.paragraphs):
+        text = para.text.strip().upper()
+        if text in ["ÍNDICE", "SUMÁRIO", "INDICE", "SUMARIO", "ÍNDICE (ATUALIZE ESTE CAMPO NO WORD)"]:
+            try:
+                p = para._element
+                p.getparent().remove(p)
+            except: pass
+            
+    # Insert new dynamic toc
+    insert_toc(doc)
+
 def execute_formatting_plan(file_path, plan_steps, output_path):
     """
     plan_steps = [
@@ -159,6 +233,8 @@ def execute_formatting_plan(file_path, plan_steps, output_path):
                 add_cover(doc, params.get('title', ''), params.get('subtitle', ''), params.get('author', ''))
             elif action == 'insert_toc':
                 insert_toc(doc)
+            elif action == 'replace_toc':
+                replace_toc(doc)
             elif action == 'format_class':
                 format_class(doc, params.get('text_class'), params.get('font_name'), params.get('size_pt'), params.get('color_hex'), params.get('bold'), params.get('italic'))
             elif action == 'format_specific_text':
@@ -167,6 +243,10 @@ def execute_formatting_plan(file_path, plan_steps, output_path):
                 align_component(doc, params.get('component'), params.get('alignment'))
             elif action == 'add_signature_block':
                 add_signature_block(doc, params.get('names', []))
+            elif action == 'resize_images':
+                resize_images(doc, params.get('width_cm'), params.get('height_cm'))
+            elif action == 'page_break_before_headings':
+                page_break_before_headings(doc)
         except Exception as e:
             print(f"Error applying action {action}: {e}")
             

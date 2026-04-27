@@ -707,30 +707,39 @@ def format_document_agent():
         output_path = os.path.join(run_folder, "Resultado.docx")
         file.save(input_path)
         
-        # Ler conteúdo básico para a IA ter contexto
-        context_text = extract_text(input_path)[:15000]
+        # Extrair Mapa Estrutural (JSON de análise profunda do documento)
+        structure_map = format_agent.analyze_document_structure(input_path)
+        context_json = json.dumps(structure_map, ensure_ascii=False)
+        
+        # Para evitar estourar o limite de tokens se o documento for GIGANTE, 
+        # limitamos o tamanho do json para a IA processar (embora Gemini 1.5/2.5 suporte muito mais).
+        if len(context_json) > 150000:
+            context_json = context_json[:150000] + "\n... [TRUNCADO]"
         
         sys_inst = (
-            "Você é um Agente Especialista em Formatação do Microsoft Word. "
-            "Seu objetivo é ler o prompt do usuário e mapear quais ações de formatação devem ser tomadas. "
-            "Você deve retornar EXCLUSIVAMENTE um ARRAY JSON. "
+            "Você é o Joorrge, um Agente Arquiteto e Especialista em Formatação do Microsoft Word. "
+            "Seu objetivo é ler o prompt do usuário, analisar o MAPA ESTRUTURAL (JSON) do documento "
+            "e mapear quais ações cirúrgicas de formatação devem ser tomadas. "
+            "Você deve retornar EXCLUSIVAMENTE um ARRAY JSON de ações. "
             "Exemplo válido: "
             "["
             "  {\"action\": \"add_cover\", \"params\": {\"title\": \"Meu Laudo\", \"subtitle\": \"Vistoria\", \"author\": \"TechConsult\"}},"
             "  {\"action\": \"insert_toc\", \"params\": {}},"
+            "  {\"action\": \"replace_toc\", \"params\": {}},"
+            "  {\"action\": \"page_break_before_headings\", \"params\": {}},"
+            "  {\"action\": \"resize_images\", \"params\": {\"width_cm\": 15}},"
             "  {\"action\": \"format_class\", \"params\": {\"text_class\": \"titulo\", \"color_hex\": \"#FF0000\", \"size_pt\": 16, \"bold\": true, \"italic\": false}},"
             "  {\"action\": \"format_specific_text\", \"params\": {\"search_text\": \"Risco Crítico\", \"color_hex\": \"#FFFFFF\", \"bg_color_hex\": \"#FF0000\", \"bold\": true}},"
             "  {\"action\": \"align_component\", \"params\": {\"component\": \"imagem\", \"alignment\": \"center\"}},"
-            "  {\"action\": \"align_component\", \"params\": {\"component\": \"titulo\", \"alignment\": \"center\"}},"
-            "  {\"action\": \"add_signature_block\", \"params\": {\"names\": [\"Pedro Eng\", \"João Perito\"]}}"
+            "  {\"action\": \"add_signature_block\", \"params\": {\"names\": [\"Pedro Eng\"]}}"
             "]\n"
-            "Valores para `text_class`: 'titulo', 'subtitulo', 'texto', 'legenda'. "
-            "Valores para `component`: 'texto', 'imagem', 'tabela', 'titulo'. "
-            "Valores para `alignment`: 'left', 'center', 'right', 'justify'. "
+            "Dicas do MAPA ESTRUTURAL:\n"
+            "- 'role' identifica se o trecho é 'title', 'subtitle', 'caption', 'body'. Use isso para inferir como aplicar as formatações.\n"
+            "- Novas ações disponíveis: `resize_images`, `replace_toc`, `page_break_before_headings`.\n"
             "Gere os parâmetros que melhor atendam ao pedido do usuário."
         )
         
-        user_msg = f"CONTEXTO DO DOCX:\n{context_text}\n\nPEDIDO DO USUÁRIO:\n{prompt}"
+        user_msg = f"MAPA ESTRUTURAL DO DOCX:\n{context_json}\n\nPEDIDO DO USUÁRIO:\n{prompt}"
         
         response = client.models.generate_content(
             model='gemini-2.5-pro',
