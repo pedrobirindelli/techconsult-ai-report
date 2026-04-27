@@ -118,8 +118,14 @@ export function AdminPanel() {
   };
 
   const handleResetPassword = async (userId: string, email: string) => {
-    const newPass = "SenhaProvisoria123";
-    if (!window.confirm(`Deseja resetar a senha de ${email} para a senha provisória "${newPass}"?\n\nO usuário será obrigado a alterá-la no primeiro acesso.`)) return;
+    const newPass = prompt(`Digite a nova senha para ${email} (Mínimo 6 caracteres):`);
+    if (!newPass) return;
+    if (newPass.length < 6) {
+      alert("A senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+    
+    if (!window.confirm(`Deseja alterar a senha de ${email} para "${newPass}"?`)) return;
 
     setActionLoading(userId);
     setError('');
@@ -143,7 +149,7 @@ export function AdminPanel() {
         throw new Error(result.error || 'Erro ao resetar senha');
       }
 
-      setSuccess(`Senha de ${email} resetada. O usuário será forçado a trocá-la no próximo acesso.`);
+      setSuccess(`Senha de ${email} alterada com sucesso para "${newPass}".`);
       fetchUsers();
     } catch (err: any) {
       setError(err.message);
@@ -296,9 +302,6 @@ export function AdminPanel() {
                     placeholder="Ex: Senha123"
                   />
                 </div>
-                <p className="text-xs text-slate-500 mt-1.5">
-                  O usuário será forçado a trocar essa senha no primeiro acesso.
-                </p>
               </div>
 
               <button
@@ -347,6 +350,7 @@ export function AdminPanel() {
                     <tr>
                       <th className="px-4 py-3 font-medium">Nome</th>
                       <th className="px-4 py-3 font-medium">E-mail</th>
+                      <th className="px-4 py-3 font-medium">Senha</th>
                       <th className="px-4 py-3 font-medium text-center">Status</th>
                       <th className="px-4 py-3 font-medium text-right">Ações</th>
                     </tr>
@@ -363,6 +367,9 @@ export function AdminPanel() {
                           )}
                         </td>
                         <td className="px-4 py-3">{user.email}</td>
+                        <td className="px-4 py-3 text-slate-700 font-mono text-sm">
+                          {user.user_metadata?.raw_password || '********'}
+                        </td>
                         <td className="px-4 py-3 text-center">
                           {user.email_confirmed_at ? (
                             <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
@@ -375,16 +382,16 @@ export function AdminPanel() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          {user.email !== 'pedrobirindelli@gmail.com' && (
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => handleResetPassword(user.id, user.email)}
-                                disabled={actionLoading === user.id}
-                                className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors border border-transparent hover:border-amber-200"
-                                title="Resetar Senha"
-                              >
-                                {actionLoading === user.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                              </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleResetPassword(user.id, user.email)}
+                              disabled={actionLoading === user.id}
+                              className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent hover:border-indigo-200"
+                              title="Alterar Senha"
+                            >
+                              {actionLoading === user.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+                            </button>
+                            {user.email !== 'pedrobirindelli@gmail.com' && (
                               <button
                                 onClick={() => handleDeleteUser(user.id, user.email)}
                                 disabled={actionLoading === user.id}
@@ -393,8 +400,8 @@ export function AdminPanel() {
                               >
                                 {actionLoading === user.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                               </button>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}

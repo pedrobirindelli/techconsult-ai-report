@@ -445,7 +445,7 @@ def admin_create_user():
         "email_confirm": True, # Auto-confirmar
         "user_metadata": {
             "name": name,
-            "must_change_password": True
+            "raw_password": password
         }
     }
     
@@ -494,7 +494,9 @@ def admin_reset_user_password(user_id):
         
     user_data = get_res.json()
     metadata = user_data.get("user_metadata", {})
-    metadata["must_change_password"] = True
+    if "must_change_password" in metadata:
+        del metadata["must_change_password"]
+    metadata["raw_password"] = new_password
     
     payload = {
         "password": new_password,
