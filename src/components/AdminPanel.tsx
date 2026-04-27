@@ -284,6 +284,7 @@ export function AdminPanel() {
               >
                 Atualizar Lista
               </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-auto rounded-xl border border-slate-200 bg-white">

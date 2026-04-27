@@ -438,7 +438,7 @@ def generate_report():
                     f"2. Tabela: {{'type': 'table', 'headers': [], 'rows': [[]]}} "
                     f"3. Imagem: {{'type': 'image', 'url': 'URL_FORNECIDA', 'caption': 'Legenda técnica'}} "
                     f"REGRAS DE IMAGEM: Não inclua 100% das fotos (evite redundância), mas INCLUA TODAS as imagens relevantes para ilustrar anomalias/apontamentos. Toda imagem deve ter uma legenda descritiva. Use a URL exata do MAPEAMENTO DE IMAGENS. "
-                    f"NUNCA traduza ou mude o nome das chaves JSON. Regras do Usuário: {rules}"
+                    f"IMPORTANTE: NUNCA use tags HTML (como <span> ou <font>). Gere apenas texto puro. Regras do Usuário: {rules}"
                 )
                 user_prompt = f"REFERÊNCIAS:\n{all_ref_text[:15000]}\n\nFONTES:\n{sources_text[:15000]}\n\nDADOS:\n{all_excel_str}\n\n{media_mapping}"
                 

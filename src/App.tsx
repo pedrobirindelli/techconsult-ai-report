@@ -68,7 +68,12 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    const handleAgentSubmit = async () => {
+    if (session) {
+      fetchRules()
+    }
+  }, [session])
+
+  const handleAgentSubmit = async () => {
     if (!agentFile) {
       alert("Selecione um arquivo Word primeiro.");
       return;
@@ -100,11 +105,6 @@ export default function App() {
       setIsAgentRunning(false);
     }
   }
-
-  if (session) {
-      fetchRules()
-    }
-  }, [session])
 
   const fetchRules = async () => {
     try {
