@@ -3,7 +3,10 @@ import time
 import shutil
 import json
 import uuid
-import docx
+import time
+import shutil
+import threading
+import queue
 import pandas as pd
 import requests
 import jwt
@@ -441,20 +444,41 @@ def generate_report():
                     f"IMPORTANTE: NUNCA use tags HTML (como <span> ou <font>). Gere apenas texto puro. Regras do Usuário: {rules}"
                 )
                 user_prompt = f"REFERÊNCIAS:\n{all_ref_text[:15000]}\n\nFONTES:\n{sources_text[:15000]}\n\nDADOS:\n{all_excel_str}\n\n{media_mapping}"
-                
-                response = client.models.generate_content_stream(
-                    model='gemini-2.5-pro',
-                    contents=gemini_files + [user_prompt],
-                    config=genai.types.GenerateContentConfig(system_instruction=sys_inst, response_mime_type="application/json")
-                )
-                
+                # Keep-alive para proxy
+                q = queue.Queue()
+                def fetch_gemini():
+                    try:
+                        resp = client.models.generate_content_stream(
+                            model='gemini-2.5-pro',
+                            contents=gemini_files + [user_prompt],
+                            config=genai.types.GenerateContentConfig(system_instruction=sys_inst, response_mime_type="application/json")
+                        )
+                        for chunk in resp:
+                            q.put(("chunk", chunk))
+                        q.put(("done", None))
+                    except Exception as e:
+                        q.put(("error", e))
+
+                t = threading.Thread(target=fetch_gemini)
+                t.start()
+
                 raw_text = ""
                 used_tokens = 0
-                for chunk in response:
-                    raw_text += chunk.text
-                    if chunk.usage_metadata:
-                        used_tokens = chunk.usage_metadata.total_token_count
-                    yield f"data: {json.dumps({'status': f'Analisando dados e gerando texto (recebidos {len(raw_text)} bytes)...', 'step': 5})}\n\n"
+                while True:
+                    try:
+                        msg_type, data = q.get(timeout=10) # Acorda a cada 10s
+                        if msg_type == "done":
+                            break
+                        elif msg_type == "error":
+                            raise data
+                        elif msg_type == "chunk":
+                            raw_text += data.text
+                            if data.usage_metadata:
+                                used_tokens = data.usage_metadata.total_token_count
+                            yield f"data: {json.dumps({'status': f'Analisando dados e gerando texto (recebidos {len(raw_text)} bytes)...', 'step': 5})}\n\n"
+                    except queue.Empty:
+                        # Timeout do queue atingido, envia ping para manter conexao viva
+                        yield ": keep-alive\n\n"
                 
                 yield f"data: {json.dumps({'status': 'Montando documento Word...', 'step': 6})}\n\n"
                 
@@ -485,7 +509,11 @@ def generate_report():
                     error_msg = f"Erro ao gerar laudo: {error_msg}"
                 yield f"data: {json.dumps({'error': error_msg})}\n\n"
 
-        return Response(stream_with_context(generate_stream()), mimetype='text/event-stream')
+        response = Response(stream_with_context(generate_stream()), mimetype='text/event-stream')
+        response.headers['X-Accel-Buffering'] = 'no'
+        response.headers['Cache-Control'] = 'no-cache'
+        response.headers['Connection'] = 'keep-alive'
+        return response
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
