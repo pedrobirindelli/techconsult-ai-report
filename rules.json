@@ -1,0 +1,47 @@
+[
+  {
+    "id": "69d2a1b9ce5c4d37acc27b1d7114b093",
+    "text": "Estetica: Se preocupe com a estetica do texto priorize sempre uma leitura fluida, considere espaçamentos entre as linhas, pargrafos e capitulos, deixe espaço para assinatura do documento.",
+    "active": true
+  },
+  {
+    "id": "2e212b9666d4414eacfbf43e42d49c17",
+    "text": "Fotos: Não é necessário usar 100% das fotos fornecidas. evite ser repetitivo no relatorio e escolha as melhores fotos para representar os potos explícito.",
+    "active": true
+  },
+  {
+    "id": "8a676cb356884009aaea10b1b5f502ea",
+    "text": "Alucinação: Evite alucinar, fique preso nas informaçoes contidas nas suas fontes de conhecimento. Quando náo tiver uma informaçao e essa for importante para o relatório indique a ausencia da informçao em italico e pinte o texto de amarelo. Otimize seu texto para informaçoes que você possuí, porem se houver informaçoes importantes segundo os modelos e as normas, indique a ausencia.",
+    "active": true
+  },
+  {
+    "id": "cb91f9c081c54ff6879babb8ecaeb73f",
+    "text": "Tabela: Utilize sempre o formato da tabela do modelo, inclua as colunas da mesma forma que o modelo indica. as colunas Local, tipo de acabamento, se está ou não em bom estado e a quantidade de patologias de infiltraçoes e fissuras assim como campo para registro de outras devem compor a tabela obrigatoriamente. O preenchimento dessas tabelas sao cruciais para a qualidade do documento, portanto tenha atençao ao preenche-las segundo os dados da inspeçao que esta sendo feita. se houver duvidas sinalise com texto em amarelo e reforço que deva marcar o texto com fundo amarelo, como se fosse um grifa texto. Se restrinja a informaçoes obtidas com as imagens e audios.",
+    "active": true
+  },
+  {
+    "id": "89d84c86c32a46518335adc9b893d77b",
+    "text": "nunca de soluções o laudo é de vistoria e nao deve sugerir correoes.",
+    "active": true
+  },
+  {
+    "id": "ed27999a1701480487ee053ba2da36c7",
+    "text": "para informações relacionadas a classificação do imovel segundo regras do IBAO utilize a norma de referencia da sua base de conhecimentos",
+    "active": true
+  },
+  {
+    "id": "b79fc0eb987e4573b2dfd090a04bc963",
+    "text": "Cuidado  ao preencher as tabelas com informações. Elas devem vir exclusivamente da analise das fotos e audios. caso o nivel de certeza seja inferior a 70% informe ausencia de dados.",
+    "active": true
+  },
+  {
+    "id": "a9a1ccd55e3a48e0a46ab7ef9618dd7e",
+    "text": "formatação do word: Crie o word com tipo de fonte Arial tamanho 12, independente do modelo informado na sua base de conhecimento. Utilize sempre a estrutura de uma capa, com título e sub titulo. Uma segunda p[agina com indice e apartir da terceira o conteudo. utilize como cores de fonte a paleta do azul marinho ao cinza e preto.  ",
+    "active": true
+  },
+  {
+    "id": "5f3c9f3b6d2849b8a5cfa8c2e4129ed9",
+    "text": "Quando mencioar o Ibape utilize trexos extraidos do manual que referencie o assunto. Priorize que no word tenha sempre a sequencia Título, resumo, Tabela e fotos. As fotos de cada título podem ser agrupadas em 4 por página.",
+    "active": true
+  }
+]

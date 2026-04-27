@@ -1,0 +1,6 @@
+README.md
+setup_cx.py
+src/TechConsult_AI.egg-info/PKG-INFO
+src/TechConsult_AI.egg-info/SOURCES.txt
+src/TechConsult_AI.egg-info/dependency_links.txt
+src/TechConsult_AI.egg-info/top_level.txt

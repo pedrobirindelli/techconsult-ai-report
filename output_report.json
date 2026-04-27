@@ -1,0 +1,205 @@
+[
+    {
+        "type": "heading1",
+        "text": "LAUDO DE VISTORIA TÉCNICA – APARTAMENTO RESIDENCIAL"
+    },
+    {
+        "type": "heading2",
+        "text": "1. Descrição, Tipologia e Padrão Construtivo do Objeto"
+    },
+    {
+        "type": "paragraph",
+        "text": "Trata-se de um apartamento residencial localizado no Edifício Veredas, na Rua das Flores, 123, Apto 74-B. A edificação possui idade aproximada de 10 anos, sendo uma torre de múltiplos andares com áreas de lazer. O padrão construtivo é considerado médio-alto."
+    },
+    {
+        "type": "paragraph",
+        "text": "Este imóvel pode ser classificado quanto a sua tipologia, segundo as definições do IBAPE/SP, como Classe 1-RESIDENCIAL – Grupo 1.1.4.– Apartamento padrão superior, com elevador. A edificação foi construída para uso residencial e mantém este uso."
+    },
+    {
+        "type": "heading2",
+        "text": "2. Vistoria"
+    },
+    {
+        "type": "paragraph",
+        "text": "A vistoria foi realizada em 25/04/2026, com início às 13:49h, pelo Engenheiro Civil Pedro Almeida (CREA SP 5061234567). A inspeção foi acompanhada pelo proprietário do imóvel. O objetivo foi avaliar o estado de conservação geral da unidade e identificar a existência de anomalias e patologias construtivas."
+    },
+    {
+        "type": "paragraph",
+        "text": "No momento da vistoria, a temperatura ambiente era de 25°C, com tempo bom e céu claro."
+    },
+    {
+        "type": "heading2",
+        "text": "3. Resultados da Vistoria"
+    },
+    {
+        "type": "paragraph",
+        "text": "Informações Gerais:\nIdentificação: Edifício Veredas, Apto 74-B\nIdade: 10 anos (aproximada)\nUso: Residencial\nRevestimento externo: Textura acrílica (bom estado)\nPintura interna: Regular"
+    },
+    {
+        "type": "heading2",
+        "text": "4. Registros"
+    },
+    {
+        "type": "paragraph",
+        "text": "A seguir, são apresentados os registros detalhados por ambiente, contendo tabelas com os tipos de acabamento, estado de conservação e patologias encontradas, seguidas pelas fotografias correspondentes."
+    },
+    {
+        "type": "heading3",
+        "text": "4.1. Sala de Estar / Jantar"
+    },
+    {
+        "type": "table",
+        "headers": ["Local", "Tipo de Acabamento", "Bom Estado?", "Infiltrações", "Fissuras", "Outras"],
+        "rows": [
+            ["Piso", "Laminado de madeira", "Sim", "Não", "Não", "Não"],
+            ["Teto", "Gesso com pintura látex", "Sim", "Não", "Não", "Não"],
+            ["Paredes", "Alvenaria com pintura látex", "Sim", "Não", "Não", "Não"]
+        ]
+    },
+    {
+        "type": "image",
+        "url": "https://agfkghlczqpyikphmsog.supabase.co/storage/v1/object/public/inspection_photos/05485ca0-f7e5-4f0c-b83a-4819a4a2bbb8/f6c0c1b1-0522-4e78-aa24-77efa3c92d64/2/0.9263986412593282.jpeg",
+        "caption": "Foto 1: Vista geral da sala de estar e jantar. Nenhumas anomalias aparentes."
+    },
+    {
+        "type": "heading3",
+        "text": "4.2. Dormitórios"
+    },
+    {
+        "type": "table",
+        "headers": ["Local", "Tipo de Acabamento", "Bom Estado?", "Infiltrações", "Fissuras", "Outras"],
+        "rows": [
+            ["Piso", "Laminado de madeira", "Sim", "Não", "Não", "Não"],
+            ["Teto", "Gesso com pintura látex", "Sim", "Não", "Não", "Não"],
+            ["Paredes", "Alvenaria com pintura látex", "Sim", "Não", "Não", "Não"]
+        ]
+    },
+    {
+        "type": "image",
+        "url": "https://agfkghlczqpyikphmsog.supabase.co/storage/v1/object/public/inspection_photos/05485ca0-f7e5-4f0c-b83a-4819a4a2bbb8/f6c0c1b1-0522-4e78-aa24-77efa3c92d64/2/0.7581430281410094.jpeg",
+        "caption": "Foto 2: Vista do dormitório casal. Revestimentos em bom estado."
+    },
+    {
+        "type": "image",
+        "url": "https://agfkghlczqpyikphmsog.supabase.co/storage/v1/object/public/inspection_photos/05485ca0-f7e5-4f0c-b83a-4819a4a2bbb8/f6c0c1b1-0522-4e78-aa24-77efa3c92d64/2/0.7425322702289513.jpeg",
+        "caption": "Foto 3: Vista do dormitório infantil. Sem anomalias aparentes."
+    },
+    {
+        "type": "heading3",
+        "text": "4.3. Banheiro Suíte"
+    },
+    {
+        "type": "table",
+        "headers": ["Local", "Tipo de Acabamento", "Bom Estado?", "Infiltrações", "Fissuras", "Outras"],
+        "rows": [
+            ["Piso", "Cerâmico", "Sim", "Não", "Não", "Não"],
+            ["Teto", "Gesso com pintura látex", "Sim", "Não", "Não", "Não"],
+            ["Paredes", "Azulejo e pintura látex", "Não", "Sim", "Não", "Mofo e descascamento da pintura"]
+        ]
+    },
+    {
+        "type": "image",
+        "url": "https://agfkghlczqpyikphmsog.supabase.co/storage/v1/object/public/inspection_photos/05485ca0-f7e5-4f0c-b83a-4819a4a2bbb8/f6c0c1b1-0522-4e78-aa24-77efa3c92d64/2/0.007835938561040479.jpeg",
+        "caption": "Foto 4: Vista geral do banheiro da suíte."
+    },
+    {
+        "type": "image",
+        "url": "https://i.imgur.com/2sL3iAI.jpeg",
+        "caption": "Foto 5: Detalhe da parede na área do box, com presença de manchas de umidade, mofo e descascamento da pintura."
+    },
+    {
+        "type": "heading3",
+        "text": "4.4. Banheiro Social"
+    },
+    {
+        "type": "table",
+        "headers": ["Local", "Tipo de Acabamento", "Bom Estado?", "Infiltrações", "Fissuras", "Outras"],
+        "rows": [
+            ["Piso", "Cerâmico", "Sim", "Não", "Não", "Não"],
+            ["Teto", "Gesso com pintura látex", "Sim", "Não", "Não", "Não"],
+            ["Paredes", "Azulejo e pintura látex", "Sim", "Não", "Não", "Não"],
+            ["Louças", "Cuba da pia em louça", "Não", "Não", "Não", "Trincas na cuba"]
+        ]
+    },
+    {
+        "type": "image",
+        "url": "https://agfkghlczqpyikphmsog.supabase.co/storage/v1/object/public/inspection_photos/05485ca0-f7e5-4f0c-b83a-4819a4a2bbb8/f6c0c1b1-0522-4e78-aa24-77efa3c92d64/2/0.32231737640925584.jpeg",
+        "caption": "Foto 6: Vista geral do banheiro social."
+    },
+    {
+        "type": "image",
+        "url": "https://agfkghlczqpyikphmsog.supabase.co/storage/v1/object/public/inspection_photos/05485ca0-f7e5-4f0c-b83a-4819a4a2bbb8/f6c0c1b1-0522-4e78-aa24-77efa3c92d64/2/0.8159361124206801.jpeg",
+        "caption": "Foto 7: Detalhe da cuba da pia, apresentando trincas múltiplas a partir do ralo."
+    },
+    {
+        "type": "heading3",
+        "text": "4.5. Cozinha e Varanda"
+    },
+    {
+        "type": "table",
+        "headers": ["Local", "Tipo de Acabamento", "Bom Estado?", "Infiltrações", "Fissuras", "Outras"],
+        "rows": [
+            ["Piso", "Cerâmico", "Sim", "Não", "Não", "Não"],
+            ["Teto", "Gesso / Laje pintada", "Sim", "Não", "Não", "Não"],
+            ["Paredes", "Azulejo / Textura", "Sim", "Não", "Não", "Não"]
+        ]
+    },
+    {
+        "type": "image",
+        "url": "https://agfkghlczqpyikphmsog.supabase.co/storage/v1/object/public/inspection_photos/05485ca0-f7e5-4f0c-b83a-4819a4a2bbb8/f6c0c1b1-0522-4e78-aa24-77efa3c92d64/2/0.5106615352388126.jpeg",
+        "caption": "Foto 8: Vista da cozinha e área de serviço, sem anomalias."
+    },
+    {
+        "type": "image",
+        "url": "https://agfkghlczqpyikphmsog.supabase.co/storage/v1/object/public/inspection_photos/05485ca0-f7e5-4f0c-b83a-4819a4a2bbb8/f6c0c1b1-0522-4e78-aa24-77efa3c92d64/2/0.8904001661633502.jpeg",
+        "caption": "Foto 9: Vista da varanda gourmet, em bom estado de conservação."
+    },
+    {
+        "type": "heading2",
+        "text": "5. Considerações Gerais"
+    },
+    {
+        "type": "paragraph",
+        "text": "O imóvel, de forma geral, apresenta-se em bom estado de conservação. No entanto, foram identificadas duas anomalias que requerem atenção:"
+    },
+    {
+        "type": "paragraph",
+        "text": "1. Banheiro da Suíte: Presença de infiltração na parede do box, causando manchas de umidade, mofo e degradação do acabamento. Sugere-se a investigação da origem do vazamento (que pode ser da própria tubulação ou do andar superior) e a posterior reparação da parede, com remoção do material danificado, impermeabilização e aplicação de novo acabamento."
+    },
+    {
+        "type": "paragraph",
+        "text": "2. Banheiro Social: A cuba da pia encontra-se com trincas severas, comprometendo seu uso e estanqueidade. Recomenda-se a substituição imediata da peça."
+    },
+    {
+        "type": "paragraph",
+        "text": "As demais áreas do apartamento não apresentaram vícios ou patologias aparentes durante a vistoria."
+    },
+    {
+        "type": "heading2",
+        "text": "6. Classificação"
+    },
+    {
+        "type": "paragraph",
+        "text": "Aparência externa do imóvel (Edifício): Novo() Excelente( ) Bom (X) Regular ( ) Mal Conservado()"
+    },
+    {
+        "type": "paragraph",
+        "text": "Estado de Conservação Geral do imóvel (Apartamento), segundo IBAPE/SP: Necessitando de reparos simples: edificação cujo estado geral possa ser recuperado com pintura interna e externa, após reparos de fissuras e trincas superficiais, sem recuperação do sistema estrutural. Eventualmente, revisão do sistema hidráulico e elétrico."
+    },
+    {
+        "type": "heading2",
+        "text": "7. Encerramento"
+    },
+    {
+        "type": "paragraph",
+        "text": "O signatário dá por encerrado o presente Laudo de Vistoria Técnica, que é composto por 08 (oito) folhas impressas em apenas um lado, com a última datada e assinada."
+    },
+    {
+        "type": "paragraph",
+        "text": "São Paulo, 26 de abril de 2026."
+    },
+    {
+        "type": "paragraph",
+        "text": "\n\n__________________________________\nEng. Pedro Almeida\nCREA SP 5061234567"
+    }
+]
