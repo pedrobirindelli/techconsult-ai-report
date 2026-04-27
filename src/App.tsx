@@ -68,15 +68,35 @@ export default function App() {
 
   const fetchRules = async () => {
     try {
-      const res = await fetch('/api/rules')
-      const data = await res.json()
-      setSavedRules(data.map((r: any) => ({ 
-        ...r, 
-        active: r.active !== undefined ? r.active : true 
-      })))
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user?.user_metadata?.saved_rules) {
+        setSavedRules(user.user_metadata.saved_rules)
+      } else {
+        setSavedRules([])
+      }
+      if (user?.user_metadata?.knowledge_rules) {
+        setKnowledgeRules(user.user_metadata.knowledge_rules)
+      }
     } catch (e) {
       console.error("Erro ao buscar regras", e)
     }
+  }
+
+  const syncRulesToSupabase = async (newRules: any[]) => {
+    try {
+      await supabase.auth.updateUser({
+        data: { saved_rules: newRules }
+      })
+    } catch (e) {
+      console.error("Erro ao salvar regras no Supabase", e)
+    }
+  }
+
+  const handleKnowledgeRulesChange = async (newText: string) => {
+    setKnowledgeRules(newText);
+    await supabase.auth.updateUser({
+      data: { knowledge_rules: newText }
+    });
   }
 
   // --- LOGICA DE FILESYSTEM LOCAL ---
@@ -288,46 +308,29 @@ export default function App() {
 
   const savePermanentRule = async () => {
     if (!knowledgeRules.trim()) return
-    const res = await fetch('/api/rules', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session?.access_token}`
-      },
-      body: JSON.stringify({ text: knowledgeRules })
-    })
-    const newRule = await res.json()
-    setSavedRules([...savedRules, { ...newRule, active: true }])
+    const newRule = { id: crypto.randomUUID(), text: knowledgeRules, active: true }
+    const newRules = [...savedRules, newRule]
+    setSavedRules(newRules)
+    await syncRulesToSupabase(newRules)
+    
     setKnowledgeRules("")
+    await supabase.auth.updateUser({
+      data: { knowledge_rules: "" }
+    });
     alert("Regra salva permanentemente!");
   }
 
   const deleteRule = async (id: string) => {
     if (!confirm("Excluir esta regra definitivamente?")) return
-    await fetch(`/api/rules/${id}`, { 
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${session?.access_token}` }
-    })
-    setSavedRules(savedRules.filter(r => r.id !== id))
+    const newRules = savedRules.filter(r => r.id !== id)
+    setSavedRules(newRules)
+    await syncRulesToSupabase(newRules)
   }
 
   const toggleRule = async (id: string) => {
-    const rule = savedRules.find(r => r.id === id)
-    if (!rule) return
-    const newActive = !rule.active
-    setSavedRules(savedRules.map(r => r.id === id ? { ...r, active: newActive } : r))
-    try {
-      await fetch(`/api/rules/${id}`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({ active: newActive })
-      })
-    } catch (err) {
-      setSavedRules(savedRules.map(r => r.id === id ? { ...r, active: !newActive } : r))
-    }
+    const newRules = savedRules.map(r => r.id === id ? { ...r, active: !r.active } : r)
+    setSavedRules(newRules)
+    await syncRulesToSupabase(newRules)
   }
 
   const startEditing = (rule: {id: string, text: string}) => {
@@ -341,15 +344,9 @@ export default function App() {
   }
 
   const saveEdit = async (id: string) => {
-    await fetch(`/api/rules/${id}`, {
-      method: 'PUT',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session?.access_token}`
-      },
-      body: JSON.stringify({ text: editingText })
-    })
-    setSavedRules(savedRules.map(r => r.id === id ? { ...r, text: editingText } : r))
+    const newRules = savedRules.map(r => r.id === id ? { ...r, text: editingText } : r)
+    setSavedRules(newRules)
+    await syncRulesToSupabase(newRules)
     setEditingRuleId(null)
   }
 
@@ -602,7 +599,7 @@ export default function App() {
                 className="w-full h-40 p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none text-slate-700 mb-6"
                 placeholder="Instrua a IA sobre termos técnicos, estilo de escrita..."
                 value={knowledgeRules}
-                onChange={(e) => setKnowledgeRules(e.target.value)}
+                onChange={(e) => handleKnowledgeRulesChange(e.target.value)}
               ></textarea>
               <button onClick={savePermanentRule} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition"><Save size={18} /> Salvar Regra</button>
               

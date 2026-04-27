@@ -44,7 +44,6 @@ SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://agfkghlczqpyikphmsog.supabase.co")
 
 UPLOAD_FOLDER = 'temp_uploads'
-RULES_FILE = 'rules.json'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def require_auth(f):
@@ -87,15 +86,7 @@ def require_admin(f):
         return f(*args, **kwargs)
     return decorated
 
-def load_persistent_rules():
-    if os.path.exists(RULES_FILE):
-        with open(RULES_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return []
 
-def save_persistent_rules(rules):
-    with open(RULES_FILE, 'w', encoding='utf-8') as f:
-        json.dump(rules, f, ensure_ascii=False, indent=2)
 
 # Helper functions
 def extract_urls(text):
@@ -375,33 +366,7 @@ def generate_report():
         # shutil.rmtree(run_folder) # Opcional: manter por um tempo para debug se necessário
         pass
 
-@app.route('/api/rules', methods=['GET'])
-@require_auth
-def list_rules(): return jsonify(load_persistent_rules())
 
-@app.route('/api/rules', methods=['POST'])
-@require_auth
-def add_rule():
-    data = request.json
-    rules = load_persistent_rules()
-    new_rule = {"id": uuid.uuid4().hex, "text": data.get("text", ""), "active": True}
-    rules.append(new_rule); save_persistent_rules(rules)
-    return jsonify(new_rule)
-
-@app.route('/api/rules/<rule_id>', methods=['DELETE', 'PUT'])
-@require_auth
-def manage_rule(rule_id):
-    rules = load_persistent_rules()
-    if request.method == 'DELETE':
-        rules = [r for r in rules if r['id'] != rule_id]
-    else:
-        data = request.json
-        for r in rules:
-            if r['id'] == rule_id:
-                if 'text' in data: r['text'] = data['text']
-                if 'active' in data: r['active'] = data['active']
-    save_persistent_rules(rules)
-    return jsonify({"success": True})
 
 @app.route('/api/admin/users', methods=['GET'])
 @require_admin
