@@ -194,7 +194,18 @@ def reconstruct_doc(json_data, template_path, output_path, temp_folder):
     
     style_map = {"heading1": "Heading 1", "heading2": "Heading 2", "heading3": "Heading 3", "paragraph": "Normal"}
     
-    for block in json_data:
+    blocks = []
+    if isinstance(json_data, list):
+        blocks = json_data
+    elif isinstance(json_data, dict):
+        for key, val in json_data.items():
+            if isinstance(val, list):
+                blocks = val
+                break
+        if not blocks:
+            blocks = [json_data]
+            
+    for block in blocks:
         if not isinstance(block, dict): continue
         b_type = block.get("type", "")
         
@@ -375,8 +386,16 @@ def generate_report():
                 )
                 
                 yield f"data: {json.dumps({'status': 'Montando documento Word...', 'step': 6})}\n\n"
+                
+                raw_text = response.text.strip()
+                if raw_text.startswith("```json"): raw_text = raw_text[7:]
+                elif raw_text.startswith("```"): raw_text = raw_text[3:]
+                if raw_text.endswith("```"): raw_text = raw_text[:-3]
+                
+                parsed_json = json.loads(raw_text.strip())
+                
                 final_doc = os.path.join(run_folder, "Resultado.docx")
-                reconstruct_doc(json.loads(response.text), base_template, final_doc, run_folder)
+                reconstruct_doc(parsed_json, base_template, final_doc, run_folder)
                 
                 yield f"data: {json.dumps({'status': 'Concluído!', 'step': 7, 'file_id': folder_id})}\n\n"
             except Exception as e:
