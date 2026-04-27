@@ -103,7 +103,7 @@ export default function App() {
       formData.append('file', agentFile);
       formData.append('prompt', agentPrompt);
 
-      const res = await fetch('/agent/format', {
+      const res = await fetch('/api/agent/format', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${session?.access_token}` },
         body: formData
@@ -816,6 +816,8 @@ export default function App() {
                       1. Laudo Original (Word)
                     </h3>
                     <label 
+                      onDragEnter={(e) => e.preventDefault()}
+                      onDragLeave={(e) => e.preventDefault()}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => {
                         e.preventDefault();

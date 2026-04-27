@@ -656,7 +656,7 @@ def admin_reset_user_password(user_id):
     return jsonify({"error": response.text}), response.status_code
 
 import tempfile
-@app.route('/agent/format', methods=['POST'])
+@app.route('/api/agent/format', methods=['POST'])
 @require_auth
 def format_document_agent():
     try:
