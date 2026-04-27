@@ -40,6 +40,8 @@ if api_key:
 
 # Configurações Supabase (Auth)
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET") # Necessário para produção
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://agfkghlczqpyikphmsog.supabase.co")
 
 UPLOAD_FOLDER = 'temp_uploads'
 RULES_FILE = 'rules.json'
@@ -61,10 +63,22 @@ def require_auth(f):
 
         try:
             token = token.replace("Bearer ", "")
-            jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")
+            decoded = jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")
+            # Injeta o usuário na requisição para uso posterior
+            request.user = decoded
             return f(*args, **kwargs)
         except Exception as e:
             return jsonify({"error": f"Token inválido: {str(e)}"}), 401
+    return decorated
+
+def require_admin(f):
+    @wraps(f)
+    @require_auth
+    def decorated(*args, **kwargs):
+        user = getattr(request, 'user', None)
+        if not user or user.get('email', '').lower() != 'pedrobirindelli@gmail.com':
+            return jsonify({"error": "Acesso negado. Apenas o administrador pode realizar esta ação."}), 403
+        return f(*args, **kwargs)
     return decorated
 
 def load_persistent_rules():
@@ -382,6 +396,57 @@ def manage_rule(rule_id):
                 if 'active' in data: r['active'] = data['active']
     save_persistent_rules(rules)
     return jsonify({"success": True})
+
+@app.route('/api/admin/users', methods=['GET'])
+@require_admin
+def admin_get_users():
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        return jsonify({"error": "SUPABASE_SERVICE_ROLE_KEY não configurado no backend."}), 500
+    
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}"
+    }
+    
+    response = requests.get(f"{SUPABASE_URL}/auth/v1/admin/users", headers=headers)
+    if response.status_code == 200:
+        return jsonify(response.json())
+    return jsonify({"error": response.text}), response.status_code
+
+@app.route('/api/admin/users', methods=['POST'])
+@require_admin
+def admin_create_user():
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        return jsonify({"error": "SUPABASE_SERVICE_ROLE_KEY não configurado no backend."}), 500
+        
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+    name = data.get('name', '')
+    
+    if not email or not password:
+        return jsonify({"error": "E-mail e senha são obrigatórios"}), 400
+        
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "email": email,
+        "password": password,
+        "email_confirm": True, # Auto-confirmar
+        "user_metadata": {
+            "name": name,
+            "must_change_password": True
+        }
+    }
+    
+    response = requests.post(f"{SUPABASE_URL}/auth/v1/admin/users", headers=headers, json=payload)
+    if response.status_code in [200, 201]:
+        return jsonify(response.json())
+    return jsonify({"error": response.text}), response.status_code
 
 import tempfile
 if __name__ == '__main__':

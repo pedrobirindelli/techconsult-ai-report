@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { FileSpreadsheet, FileText, Upload, Settings, Play, Brain, BrainCircuit, FileSignature, DollarSign, Download, CheckCircle2, Save, Trash2, FilePlus, LogOut, FolderOpen } from 'lucide-react'
 import { supabase } from './lib/supabaseClient'
 import Login from './components/Login'
+import { ForcePasswordChange } from './components/ForcePasswordChange'
+import { AdminPanel } from './components/AdminPanel'
 
 interface AppFile {
   name: string;
@@ -353,6 +355,16 @@ export default function App() {
 
   if (!session) return <Login />;
 
+  const isMasterAdmin = session?.user?.email?.toLowerCase() === 'pedrobirindelli@gmail.com';
+  const mustChangePassword = session?.user?.user_metadata?.must_change_password;
+
+  if (mustChangePassword) {
+    return <ForcePasswordChange onPasswordChanged={() => {
+      // Força a recarga da sessão para atualizar os metadados no lado do cliente
+      supabase.auth.refreshSession().then(({ data }) => setSession(data.session));
+    }} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex relative">
       {/* Estimation Modal */}
@@ -412,9 +424,34 @@ export default function App() {
           >
             <Settings size={18} /> Comportamento
           </button>
+          {isMasterAdmin && (
+            <button 
+              onClick={() => setActiveTab('admin')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'admin' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800'}`}
+            >
+              <Settings size={18} /> Gestão de Usuários
+            </button>
+          )}
         </nav>
 
-        <div className="p-4 border-t border-slate-800">
+        <div className="p-4 border-t border-slate-800 space-y-2">
+          {!mustChangePassword && (
+            <button 
+              onClick={async () => {
+                const newPass = prompt("Digite sua nova senha:");
+                if (newPass && newPass.length >= 6) {
+                  const { error } = await supabase.auth.updateUser({ password: newPass });
+                  if (error) alert("Erro ao alterar senha: " + error.message);
+                  else alert("Senha alterada com sucesso!");
+                } else if (newPass) {
+                  alert("A senha deve ter pelo menos 6 caracteres.");
+                }
+              }}
+              className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all"
+            >
+              <Settings size={16} /> Alterar Senha
+            </button>
+          )}
           <button 
             onClick={() => supabase.auth.signOut()}
             className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-red-900/20 rounded-lg transition-all"
@@ -613,6 +650,10 @@ export default function App() {
               </div>
             </div>
           </div>
+        )}
+
+        {activeTab === 'admin' && isMasterAdmin && (
+          <AdminPanel />
         )}
       </main>
     </div>
