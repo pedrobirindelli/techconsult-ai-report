@@ -6,9 +6,15 @@ export function AdminPanel() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Master Password Form State
+  const [masterPassword, setMasterPassword] = useState('');
+  const [masterConfirm, setMasterConfirm] = useState('');
+  const [masterLoading, setMasterLoading] = useState(false);
+  const [masterSuccess, setMasterSuccess] = useState('');
+  const [masterError, setMasterError] = useState('');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -112,12 +118,8 @@ export function AdminPanel() {
   };
 
   const handleResetPassword = async (userId: string, email: string) => {
-    const newPass = prompt(`Digite a nova senha provisória para ${email} (Mínimo 6 caracteres):`);
-    if (!newPass) return;
-    if (newPass.length < 6) {
-      alert("A senha deve ter pelo menos 6 caracteres.");
-      return;
-    }
+    const newPass = "SenhaProvisoria123";
+    if (!window.confirm(`Deseja resetar a senha de ${email} para a senha provisória "${newPass}"?\n\nO usuário será obrigado a alterá-la no primeiro acesso.`)) return;
 
     setActionLoading(userId);
     setError('');
@@ -159,6 +161,65 @@ export function AdminPanel() {
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Painel do Administrador</h1>
           <p className="text-slate-500">Gerencie o acesso da sua equipe ao sistema de laudos.</p>
+        </div>
+      </div>
+
+      {/* Master Password Change Section */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+            <KeyRound className="w-5 h-5 text-indigo-500" />
+            Alterar Minha Senha (Master)
+          </h2>
+          <p className="text-sm text-slate-500 mt-1">Atualize a sua própria senha de administrador do sistema.</p>
+          {masterError && <p className="text-red-500 text-sm mt-2 font-medium">{masterError}</p>}
+          {masterSuccess && <p className="text-emerald-600 text-sm mt-2 font-medium">{masterSuccess}</p>}
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="password"
+            placeholder="Nova senha (mín. 6)"
+            value={masterPassword}
+            onChange={(e) => setMasterPassword(e.target.value)}
+            className="w-full md:w-auto bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500/50 outline-none"
+          />
+          <input
+            type="password"
+            placeholder="Confirmar senha"
+            value={masterConfirm}
+            onChange={(e) => setMasterConfirm(e.target.value)}
+            className="w-full md:w-auto bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500/50 outline-none"
+          />
+          <button
+            onClick={async () => {
+              setMasterError('');
+              setMasterSuccess('');
+              if (masterPassword.length < 6) {
+                setMasterError('A senha deve ter no mínimo 6 caracteres.');
+                return;
+              }
+              if (masterPassword !== masterConfirm) {
+                setMasterError('As senhas não coincidem.');
+                return;
+              }
+              setMasterLoading(true);
+              try {
+                const { error } = await supabase.auth.updateUser({ password: masterPassword });
+                if (error) throw error;
+                setMasterSuccess('Senha alterada com sucesso!');
+                setMasterPassword('');
+                setMasterConfirm('');
+              } catch (err: any) {
+                setMasterError(err.message || 'Erro ao alterar a senha.');
+              } finally {
+                setMasterLoading(false);
+              }
+            }}
+            disabled={masterLoading || !masterPassword || !masterConfirm}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-xl shadow-sm flex items-center justify-center gap-2 transition-all disabled:opacity-70 text-sm whitespace-nowrap"
+          >
+            {masterLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Atualizar'}
+          </button>
         </div>
       </div>
 
