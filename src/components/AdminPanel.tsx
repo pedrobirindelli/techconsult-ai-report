@@ -272,6 +272,11 @@ export function AdminPanel() {
                 <Users className="w-5 h-5 text-blue-500" />
                 Usuários Cadastrados
               </h2>
+              <div className="flex gap-2">
+                <div className="bg-indigo-50 border border-indigo-100 rounded-lg px-4 py-1.5 flex items-center gap-2 text-indigo-700">
+                  <span className="text-xs uppercase font-bold tracking-wider opacity-70">Total Gasto:</span>
+                  <span className="font-mono font-semibold">⚡ {users.reduce((acc, user) => acc + (user.user_metadata?.total_tokens_used || 0), 0).toLocaleString()} tokens</span>
+                </div>
               <button 
                 onClick={fetchUsers} 
                 disabled={loading}
@@ -307,12 +312,17 @@ export function AdminPanel() {
                     {users.map((user) => (
                       <tr key={user.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-4 py-3 text-slate-800 font-medium">
-                          {user.user_metadata?.name || 'Sem Nome'}
-                          {user.email === 'pedrobirindelli@gmail.com' && (
-                            <span className="ml-2 inline-flex items-center rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-600/20">
-                              Admin
-                            </span>
-                          )}
+                          <div className="flex items-center gap-2">
+                            <span>{user.user_metadata?.name || 'Sem Nome'}</span>
+                            {user.email === 'pedrobirindelli@gmail.com' && (
+                              <span className="inline-flex items-center rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-600/20">
+                                Admin
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-0.5 font-mono">
+                            ⚡ {user.user_metadata?.total_tokens_used?.toLocaleString() || 0} tokens
+                          </div>
                         </td>
                         <td className="px-4 py-3">{user.email}</td>
                         <td className="px-4 py-3 text-slate-700 font-mono text-sm">

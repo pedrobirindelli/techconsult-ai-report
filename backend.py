@@ -302,31 +302,38 @@ def estimate_cost():
         excel_files = request.files.getlist('excel_files')
         template_files = request.files.getlist('template_files')
         source_files = request.files.getlist('source_files')
+        knowledge_rules = request.form.get('knowledge_rules', '')
         
         media_count = 0
-        text_size_bytes = 0
+        text_size_bytes = len(knowledge_rules)
         run_folder = tempfile.mkdtemp(dir=UPLOAD_FOLDER)
         
-        for idx, excel in enumerate(excel_files):
-            path = os.path.join(run_folder, f"est_{idx}.xlsx")
-            excel.save(path)
-            try:
-                df = pd.read_excel(path)
-                for val in df.values.flatten():
-                    if isinstance(val, str):
-                        urls = extract_urls(val)
-                        media_count += len([u for u in urls if 'supabase.co' in u])
-            except: pass
+        try:
+            for idx, excel in enumerate(excel_files):
+                path = os.path.join(run_folder, f"est_{idx}.xlsx")
+                excel.save(path)
+                try:
+                    df = pd.read_excel(path)
+                    for val in df.values.flatten():
+                        if isinstance(val, str):
+                            urls = extract_urls(val)
+                            media_count += len([u for u in urls if 'supabase.co' in u])
+                except: pass
 
-        for t in template_files:
-            path = os.path.join(run_folder, t.filename)
-            t.save(path); text_size_bytes += len(extract_text(path))
-                
-        for s in source_files:
-            path = os.path.join(run_folder, s.filename)
-            s.save(path); text_size_bytes += len(extract_text(path))
+            for t in template_files:
+                path = os.path.join(run_folder, getattr(t, 'filename', f't_{uuid.uuid4().hex}'))
+                t.save(path)
+                text_size_bytes += len(extract_text(path))
+                    
+            for s in source_files:
+                path = os.path.join(run_folder, getattr(s, 'filename', f's_{uuid.uuid4().hex}'))
+                s.save(path)
+                text_size_bytes += len(extract_text(path))
 
-        shutil.rmtree(run_folder)
+        finally:
+            # Força remoção ignorando erros de arquivo em uso no Windows
+            shutil.rmtree(run_folder, ignore_errors=True)
+            
         text_tokens = int(text_size_bytes / 4)
         total_tokens = text_tokens + (media_count * 258)
         return jsonify({
@@ -440,8 +447,11 @@ def generate_report():
                 )
                 
                 raw_text = ""
+                used_tokens = 0
                 for chunk in response:
                     raw_text += chunk.text
+                    if chunk.usage_metadata:
+                        used_tokens = chunk.usage_metadata.total_token_count
                     yield f"data: {json.dumps({'status': f'Analisando dados e gerando texto (recebidos {len(raw_text)} bytes)...', 'step': 5})}\n\n"
                 
                 yield f"data: {json.dumps({'status': 'Montando documento Word...', 'step': 6})}\n\n"
@@ -460,7 +470,7 @@ def generate_report():
                 if len(final_doc_obj.paragraphs) <= 1 and not final_doc_obj.tables:
                     raise Exception(f"A IA gerou um formato inesperado que resultou num laudo vazio. Retorno cru da IA (copie isto e envie ao suporte): {raw_text[:2000]}")
                 
-                yield f"data: {json.dumps({'status': 'Concluído!', 'step': 7, 'file_id': folder_id})}\n\n"
+                yield f"data: {json.dumps({'status': 'Concluído!', 'step': 7, 'file_id': folder_id, 'tokens_used': used_tokens})}\n\n"
             except Exception as e:
                 error_msg = str(e)
                 if "403" in error_msg or "PERMISSION_DENIED" in error_msg or "API key" in error_msg or "API_KEY_INVALID" in error_msg:

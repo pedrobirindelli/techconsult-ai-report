@@ -41,6 +41,7 @@ export default function App() {
   
   const [isGenerating, setIsGenerating] = useState(false)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
+  const [actualTokens, setActualTokens] = useState<number | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
   const [generationStatus, setGenerationStatus] = useState<string | null>(null)
   // Gerenciamento Local
@@ -132,6 +133,7 @@ export default function App() {
     setVisualTemplate(null)
     setEstimation(null)
     setDownloadUrl(null)
+    setActualTokens(null)
     setErrorMsg("")
   }
 
@@ -287,6 +289,7 @@ export default function App() {
     setIsGenerating(true);
     setErrorMsg('');
     setDownloadUrl(null);
+    setActualTokens(null);
     setGenerationStatus('Preparando arquivos para envio...');
     
     try {
@@ -330,6 +333,21 @@ export default function App() {
                     if (!downloadRes.ok) throw new Error("Erro ao baixar arquivo gerado");
                     const blob = await downloadRes.blob();
                     const url = window.URL.createObjectURL(blob);
+                    
+                    if (data.tokens_used) {
+                      setActualTokens(data.tokens_used);
+                      
+                      const currentTokens = session?.user?.user_metadata?.total_tokens_used || 0;
+                      const newTotal = currentTokens + data.tokens_used;
+                      await supabase.auth.updateUser({
+                        data: { total_tokens_used: newTotal }
+                      });
+                      
+                      if (session?.user) {
+                        session.user.user_metadata = { ...session.user.user_metadata, total_tokens_used: newTotal };
+                      }
+                    }
+                    
                     setDownloadUrl(url);
                     setGenerationStatus(null);
                   }
@@ -629,12 +647,17 @@ export default function App() {
             </div>
 
             {downloadUrl && !isGenerating && (
-              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 p-6 rounded-xl border border-emerald-200 flex justify-between items-center shadow-xl animate-bounce">
+              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 p-6 rounded-xl border border-emerald-200 flex flex-col sm:flex-row justify-between items-center shadow-xl animate-bounce gap-4">
                 <div>
                   <h3 className="text-lg font-bold text-emerald-900">Laudo Gerado com Sucesso!</h3>
-                  <p className="text-sm text-emerald-700">Clique ao lado para salvar no seu computador.</p>
+                  <p className="text-sm text-emerald-700 mb-2">Clique ao lado para salvar no seu computador.</p>
+                  {actualTokens && (
+                    <p className="text-xs font-mono bg-emerald-100 text-emerald-800 px-2 py-1 rounded inline-block">
+                      ⚡ Tokens processados: {actualTokens.toLocaleString()} (~${((actualTokens/1000000)*1.25).toFixed(4)})
+                    </p>
+                  )}
                 </div>
-                <a href={downloadUrl} download={`${projectName || 'Laudo'}_Gerado_IA.docx`} className="bg-emerald-600 text-white px-6 py-4 rounded-xl shadow-lg flex items-center gap-2 font-bold hover:bg-emerald-700 transition-all">
+                <a href={downloadUrl} download={`${projectName || 'Laudo'}_Gerado_IA.docx`} className="bg-emerald-600 text-white px-6 py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 font-bold hover:bg-emerald-700 transition-all">
                   <Download size={20} /> BAIXAR WORD
                 </a>
               </div>
