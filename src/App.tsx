@@ -203,33 +203,12 @@ export default function App() {
       
       const blob = await res.blob();
       
-      // Solicitar local de salvamento
-      try {
-        if ('showSaveFilePicker' in window) {
-          const handle = await window.showSaveFilePicker({
-            suggestedName: 'Laudo_Formatado_Jorge.docx',
-            types: [{
-              description: 'Microsoft Word Document',
-              accept: { 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'] },
-            }],
-          });
-          const writable = await handle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-          setAgentResultUrl("saved"); // Apenas para sair do estado de isRunning
-        } else {
-          // Fallback para navegadores sem suporte
-          const url = URL.createObjectURL(blob);
-          setAgentResultUrl(url);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = 'Laudo_Formatado_Jorge.docx';
-          a.click();
-        }
-      } catch (saveErr) {
-        console.log("Usuário cancelou o salvamento do arquivo", saveErr);
-        setAgentResultUrl("cancelled");
-      }
+      const url = URL.createObjectURL(blob);
+      setAgentResultUrl(url);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Laudo_Formatado_Jorge.docx';
+      a.click();
     } catch (e: any) {
       alert(e.message);
     } finally {
