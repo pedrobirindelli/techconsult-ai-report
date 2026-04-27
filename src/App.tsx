@@ -31,6 +31,7 @@ export default function App() {
   const [agentPrompt, setAgentPrompt] = useState("Ex: Gere uma capa com o título Laudo e autor Pedro. Pinte todos os subtítulos de azul e centralize as imagens.")
   const [isAgentRunning, setIsAgentRunning] = useState(false)
   const [agentResultUrl, setAgentResultUrl] = useState<string | null>(null)
+  const [agentStatus, setAgentStatus] = useState<string | null>(null)
   
   // States para arquivos do projeto
   const [excelFiles, setExcelFiles] = useState<AppFile[]>([])
@@ -80,6 +81,23 @@ export default function App() {
     }
     setIsAgentRunning(true);
     setAgentResultUrl(null);
+    setActualTokens(null);
+    setAgentStatus("Lendo arquivo bruto...");
+    
+    const phrases = [
+      "Lendo arquivo bruto...",
+      "Jorge está analisando suas instruções...",
+      "Mapeando regras de formatação...",
+      "Ajustando fontes e alinhamentos...",
+      "Montando o documento final...",
+      "Ajeitando a gravata, quase pronto..."
+    ];
+    let phraseIndex = 0;
+    const interval = setInterval(() => {
+      phraseIndex = (phraseIndex + 1) % phrases.length;
+      setAgentStatus(phrases[phraseIndex]);
+    }, 4000);
+
     try {
       const formData = new FormData();
       formData.append('file', agentFile);
@@ -93,6 +111,21 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro no Agente");
       
+      clearInterval(interval);
+      setAgentStatus("Pronto! Baixando arquivo...");
+
+      if (data.tokens_used) {
+        setActualTokens(data.tokens_used);
+        const currentTokens = session?.user?.user_metadata?.total_tokens_used || 0;
+        const newTotal = currentTokens + data.tokens_used;
+        await supabase.auth.updateUser({
+          data: { total_tokens_used: newTotal }
+        });
+        if (session?.user) {
+          session.user.user_metadata = { ...session.user.user_metadata, total_tokens_used: newTotal };
+        }
+      }
+      
       const downloadRes = await fetch(`/api/download/${data.file_id}?file=output.docx`, {
         headers: { 'Authorization': `Bearer ${session?.access_token}` }
       });
@@ -102,6 +135,8 @@ export default function App() {
     } catch (e: any) {
       alert(e.message);
     } finally {
+      clearInterval(interval);
+      setAgentStatus(null);
       setIsAgentRunning(false);
     }
   }
@@ -821,13 +856,19 @@ export default function App() {
                 </div>
 
                 <div className="mt-8 flex flex-col items-center border-t border-slate-100 pt-8">
+                  {agentStatus && (
+                    <div className="mb-4 text-indigo-600 font-medium animate-pulse flex items-center gap-2">
+                      <Loader2 className="animate-spin" size={18} />
+                      {agentStatus}
+                    </div>
+                  )}
                   {!isAgentRunning && !agentResultUrl && (
                     <button 
                       onClick={handleAgentSubmit}
                       className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-10 rounded-xl shadow-lg shadow-indigo-600/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-3"
                     >
-                      <BrainCircuit size={20} />
-                      EXECUTAR AGENTE DE FORMATAÇÃO
+                      <Smile size={20} />
+                      CHAMAR O JOORRGE
                     </button>
                   )}
 
