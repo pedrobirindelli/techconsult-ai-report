@@ -11,7 +11,7 @@ import requests
 import jwt
 import logging
 import format_agent
-from flask import Flask, request, jsonify, send_file, Response, stream_with_context
+from flask import Flask, request, jsonify, send_file, Response, stream_with_context, make_response
 from flask_cors import CORS
 from google import genai
 from dotenv import load_dotenv
