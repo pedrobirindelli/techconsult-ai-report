@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FileSpreadsheet, FileText, Upload, Settings, Play, Brain, BrainCircuit, FileSignature, DollarSign, Download, CheckCircle2, Save, Trash2, FilePlus, LogOut, FolderOpen, Users } from 'lucide-react'
+import { FileSpreadsheet, FileText, Upload, Settings, Play, Brain, BrainCircuit, FileSignature, DollarSign, Download, CheckCircle2, Save, Trash2, FilePlus, LogOut, FolderOpen, Users, Loader2 } from 'lucide-react'
 import { supabase } from './lib/supabaseClient'
 import Login from './components/Login'
 import { ForcePasswordChange } from './components/ForcePasswordChange'
@@ -42,7 +42,7 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
-  
+  const [generationStatus, setGenerationStatus] = useState<string | null>(null)
   // Gerenciamento Local
   const [projectName, setProjectName] = useState('')
   const [projectHandle, setProjectHandle] = useState<FileSystemDirectoryHandle | null>(null)
@@ -279,6 +279,7 @@ export default function App() {
     setIsGenerating(true);
     setErrorMsg('');
     setDownloadUrl(null);
+    setGenerationStatus('Preparando arquivos para envio...');
     
     try {
       const body = await buildFormData();
@@ -293,12 +294,49 @@ export default function App() {
         throw new Error(errorData.error || "Erro no servidor da IA. Falha ao gerar.");
       }
       
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      setDownloadUrl(url);
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder("utf-8");
+      
+      if (reader) {
+        let done = false;
+        while (!done) {
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
+          if (value) {
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.substring(6));
+                  if (data.error) {
+                    throw new Error(data.error);
+                  }
+                  if (data.status) {
+                    setGenerationStatus(data.status);
+                  }
+                  if (data.file_id) {
+                    const downloadRes = await fetch(`/api/download/${data.file_id}`, {
+                      headers: { 'Authorization': `Bearer ${session?.access_token}` }
+                    });
+                    if (!downloadRes.ok) throw new Error("Erro ao baixar arquivo gerado");
+                    const blob = await downloadRes.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    setDownloadUrl(url);
+                    setGenerationStatus(null);
+                  }
+                } catch (e) {
+                  // handle incomplete JSON if chunk is broken, though usually SSE sends full lines
+                }
+              }
+            }
+          }
+        }
+      }
       
     } catch (err: any) {
       setErrorMsg(err.message || "Erro desconhecido");
+      setGenerationStatus(null);
     } finally {
       setIsGenerating(false);
     }
@@ -566,6 +604,11 @@ export default function App() {
               <div className="text-xs text-slate-500">
                 <p className="font-bold flex items-center gap-1"><Brain size={14} className="text-blue-500" /> IA: Gemini 2.5 Pro</p>
                 <p className="mt-1 italic">Os arquivos serão processados na nuvem e retornados para o seu computador.</p>
+                {generationStatus && (
+                  <p className="mt-3 text-indigo-600 font-medium animate-pulse flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" /> {generationStatus}
+                  </p>
+                )}
               </div>
               
               <button 

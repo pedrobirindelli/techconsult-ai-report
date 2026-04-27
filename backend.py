@@ -7,7 +7,7 @@ import docx
 import pandas as pd
 import requests
 import jwt
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, Response, stream_with_context
 from flask_cors import CORS
 from google import genai
 from dotenv import load_dotenv
@@ -296,7 +296,6 @@ def estimate_cost():
 @app.route('/generate', methods=['POST'])
 @require_auth
 def generate_report():
-    run_folder = tempfile.mkdtemp(dir=UPLOAD_FOLDER)
     try:
         excel_files = request.files.getlist('excel_files')
         template_files = request.files.getlist('template_files')
@@ -304,68 +303,100 @@ def generate_report():
         visual_template = request.files.get('visual_template')
         rules = request.form.get('knowledge_rules', '')
 
-        all_excel_str = ""; url_to_local = {}
+        folder_id = uuid.uuid4().hex
+        run_folder = os.path.join(UPLOAD_FOLDER, folder_id)
+        os.makedirs(run_folder, exist_ok=True)
+
         for idx, f in enumerate(excel_files):
-            path = os.path.join(run_folder, f"data_{idx}.xlsx")
-            f.save(path)
-            try:
-                df = pd.read_excel(path)
-                all_excel_str += f"\n[Arquivo {idx+1}]\n" + df.to_json(orient="records", force_ascii=False)
-                for val in df.values.flatten():
-                    if isinstance(val, str):
-                        for url in extract_urls(val):
-                            if 'supabase.co' in url:
-                                local = download_file(url, run_folder)
-                                if local: url_to_local[url] = local
-            except: pass
-
-        gemini_files = []
-        media_mapping = "\nMAPEAMENTO DE IMAGENS:\n"
-        for url, local in url_to_local.items():
-            if local.endswith(('.jpeg', '.jpg', '.png', '.webp')):
-                try:
-                    g_file = client.files.upload(file=local)
-                    while g_file.state.name == "PROCESSING":
-                        time.sleep(1)
-                        g_file = client.files.get(name=g_file.name)
-                    gemini_files.append(g_file)
-                    media_mapping += f"- {os.path.basename(local)} -> {url}\n"
-                except: pass
-
-        all_ref_text = ""; base_template = None
+            f.save(os.path.join(run_folder, f"data_{idx}.xlsx"))
         if visual_template:
-            base_template = os.path.join(run_folder, "master.docx")
-            visual_template.save(base_template)
-
+            visual_template.save(os.path.join(run_folder, "master.docx"))
         for idx, t in enumerate(template_files):
-            path = os.path.join(run_folder, f"ref_{idx}_{t.filename}")
-            t.save(path)
-            if not base_template and path.lower().endswith('.docx'): base_template = path
-            all_ref_text += f"\n[Referência {idx+1}]\n" + extract_text(path)
-
-        sources_text = ""
+            t.save(os.path.join(run_folder, f"ref_{idx}_{t.filename}"))
         for idx, s in enumerate(source_files):
-            path = os.path.join(run_folder, f"src_{idx}_{s.filename}")
-            s.save(path); sources_text += f"\n[Fonte {idx+1}]\n" + extract_text(path)
+            s.save(os.path.join(run_folder, f"src_{idx}_{s.filename}"))
 
-        sys_inst = f"Engenheiro Civil Perito. Retorne APENAS JSON de blocos (heading1, paragraph, image, table). Regras: {rules}"
-        user_prompt = f"REFERÊNCIAS:\n{all_ref_text[:15000]}\n\nFONTES:\n{sources_text[:15000]}\n\nDADOS:\n{all_excel_str}\n\n{media_mapping}"
-        
-        response = client.models.generate_content(
-            model='gemini-2.5-pro',
-            contents=gemini_files + [user_prompt],
-            config=genai.types.GenerateContentConfig(system_instruction=sys_inst, response_mime_type="application/json")
-        )
-        
-        final_doc = os.path.join(run_folder, "Resultado.docx")
-        reconstruct_doc(json.loads(response.text), base_template, final_doc, run_folder)
-        
+        def generate_stream():
+            try:
+                yield f"data: {json.dumps({'status': 'Iniciando processamento dos arquivos...', 'step': 1})}\n\n"
+                
+                all_excel_str = ""
+                url_to_local = {}
+                yield f"data: {json.dumps({'status': 'Extraindo dados das planilhas...', 'step': 2})}\n\n"
+                for idx, f in enumerate(excel_files):
+                    path = os.path.join(run_folder, f"data_{idx}.xlsx")
+                    try:
+                        df = pd.read_excel(path)
+                        all_excel_str += f"\n[Arquivo {idx+1}]\n" + df.to_json(orient="records", force_ascii=False)
+                        for val in df.values.flatten():
+                            if isinstance(val, str):
+                                for url in extract_urls(val):
+                                    if 'supabase.co' in url:
+                                        local = download_file(url, run_folder)
+                                        if local: url_to_local[url] = local
+                    except: pass
+
+                yield f"data: {json.dumps({'status': 'Preparando imagens para a IA...', 'step': 3})}\n\n"
+                gemini_files = []
+                media_mapping = "\nMAPEAMENTO DE IMAGENS:\n"
+                for url, local in url_to_local.items():
+                    if local.endswith(('.jpeg', '.jpg', '.png', '.webp')):
+                        try:
+                            g_file = client.files.upload(file=local)
+                            while g_file.state.name == "PROCESSING":
+                                time.sleep(1)
+                                g_file = client.files.get(name=g_file.name)
+                            gemini_files.append(g_file)
+                            media_mapping += f"- {os.path.basename(local)} -> {url}\n"
+                        except: pass
+
+                yield f"data: {json.dumps({'status': 'Processando referências e fontes...', 'step': 4})}\n\n"
+                all_ref_text = ""
+                base_template = os.path.join(run_folder, "master.docx") if visual_template else None
+                
+                for idx, t in enumerate(template_files):
+                    path = os.path.join(run_folder, f"ref_{idx}_{t.filename}")
+                    if not base_template and path.lower().endswith('.docx'): base_template = path
+                    all_ref_text += f"\n[Referência {idx+1}]\n" + extract_text(path)
+
+                sources_text = ""
+                for idx, s in enumerate(source_files):
+                    path = os.path.join(run_folder, f"src_{idx}_{s.filename}")
+                    sources_text += f"\n[Fonte {idx+1}]\n" + extract_text(path)
+
+                yield f"data: {json.dumps({'status': 'Analisando dados com Gemini 2.5 Pro (pode demorar alguns minutos)...', 'step': 5})}\n\n"
+                sys_inst = f"Engenheiro Civil Perito. Retorne APENAS JSON de blocos (heading1, paragraph, image, table). Regras: {rules}"
+                user_prompt = f"REFERÊNCIAS:\n{all_ref_text[:15000]}\n\nFONTES:\n{sources_text[:15000]}\n\nDADOS:\n{all_excel_str}\n\n{media_mapping}"
+                
+                response = client.models.generate_content(
+                    model='gemini-2.5-pro',
+                    contents=gemini_files + [user_prompt],
+                    config=genai.types.GenerateContentConfig(system_instruction=sys_inst, response_mime_type="application/json")
+                )
+                
+                yield f"data: {json.dumps({'status': 'Montando documento Word...', 'step': 6})}\n\n"
+                final_doc = os.path.join(run_folder, "Resultado.docx")
+                reconstruct_doc(json.loads(response.text), base_template, final_doc, run_folder)
+                
+                yield f"data: {json.dumps({'status': 'Concluído!', 'step': 7, 'file_id': folder_id})}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+        return Response(stream_with_context(generate_stream()), mimetype='text/event-stream')
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/download/<folder_id>', methods=['GET'])
+@require_auth
+def download_report(folder_id):
+    import re
+    if not re.match(r'^[a-zA-Z0-9_-]+$', folder_id):
+        return "Invalid folder", 400
+    
+    final_doc = os.path.join(UPLOAD_FOLDER, folder_id, "Resultado.docx")
+    if os.path.exists(final_doc):
         return send_file(final_doc, as_attachment=True, download_name="Relatorio_Gerado.docx")
-    except Exception as e: return jsonify({"error": str(e)}), 500
-    finally:
-        # shutil.rmtree(run_folder) # Opcional: manter por um tempo para debug se necessário
-        pass
-
+    return "File not found", 404
 
 
 @app.route('/api/admin/users', methods=['GET'])
