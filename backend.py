@@ -742,7 +742,7 @@ def format_document_agent():
         user_msg = f"MAPA ESTRUTURAL DO DOCX:\n{context_json}\n\nPEDIDO DO USUÁRIO:\n{prompt}"
         
         response = client.models.generate_content(
-            model='gemini-2.5-pro',
+            model='gemini-2.5-flash',
             contents=user_msg,
             config=genai.types.GenerateContentConfig(
                 system_instruction=sys_inst,
