@@ -549,31 +549,31 @@ export default function App() {
         <nav className="flex-1 px-4 space-y-2">
           <button 
             onClick={() => setActiveTab('dashboard')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'dashboard' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-white hover:bg-slate-800'}`}
           >
             <Play size={18} /> Geração
           </button>
           <button 
             onClick={() => setActiveTab('knowledge')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'knowledge' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'knowledge' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-white hover:bg-slate-800'}`}
           >
             <Brain size={18} /> Comportamento
           </button>
             {session.user.email === 'pedrobirindelli@gmail.com' && (
               <>
                 <button
-                  onClick={() => setActiveTab('admin')}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'admin' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
+                  onClick={() => setActiveTab('agente')}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'agente' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-white hover:bg-slate-800'}`}
                 >
-                  <Users size={20} />
-                  <span>Gestão de Usuários</span>
+                  <Smile size={18} />
+                  <span>Joorrge</span>
                 </button>
                 <button
-                  onClick={() => setActiveTab('agente')}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'agente' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
+                  onClick={() => setActiveTab('admin')}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'admin' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-white hover:bg-slate-800'}`}
                 >
-                  <Smile size={20} />
-                  <span>Joorrge</span>
+                  <Users size={18} />
+                  <span>Gestão de Usuários</span>
                 </button>
               </>
             )}
