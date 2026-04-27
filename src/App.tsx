@@ -764,10 +764,10 @@ export default function App() {
               <div className="bg-gradient-to-br from-indigo-900 to-purple-900 rounded-2xl p-8 text-white shadow-xl">
                 <div className="flex items-center gap-3 mb-4">
                   <BrainCircuit className="w-8 h-8 text-indigo-300" />
-                  <h1 className="text-2xl font-bold">Agente Especialista em Formatação</h1>
+                  <h1 className="text-2xl font-bold">Jorge, seu Agente de Formatação</h1>
                 </div>
                 <p className="text-indigo-100 opacity-90 max-w-2xl text-sm leading-relaxed">
-                  Faça o upload do laudo bruto em Word e forneça instruções em linguagem natural. O Agente de IA irá processar as regras, formatar textos, aplicar alinhamentos, adicionar elementos (capa, índice) e gerar a versão final para download sem intervenção manual.
+                  Olá! Eu sou o Jorge. Estou aqui para ajudar a deixar o seu laudo perfeito! Faça o upload do arquivo Word bruto e me diga exatamente como quer que eu o formate (ex: arrumar a capa, centralizar imagens, padronizar títulos e fontes). Pode me explicar tudo de forma natural, como se estivesse falando com um colega!
                 </p>
               </div>
               
@@ -780,7 +780,16 @@ export default function App() {
                       <FileText size={18} className="text-indigo-500" />
                       1. Laudo Original (Word)
                     </h3>
-                    <label className="border-2 border-dashed border-indigo-200 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-indigo-50 hover:border-indigo-400 transition-colors group h-40">
+                    <label 
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                          setAgentFile(e.dataTransfer.files[0]);
+                        }
+                      }}
+                      className="border-2 border-dashed border-indigo-200 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-indigo-50 hover:border-indigo-400 transition-colors group h-40"
+                    >
                       <Upload size={24} className="text-indigo-400 group-hover:text-indigo-600 mb-2 transition-colors" />
                       <span className="text-sm text-indigo-900 font-medium">{agentFile ? agentFile.name : 'Selecionar .docx'}</span>
                       <input 
