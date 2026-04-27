@@ -16,7 +16,7 @@ def analyze_document_structure(file_path):
             from docx.text.paragraph import Paragraph
             para = Paragraph(child, doc)
             text = para.text.strip()
-            has_image = len(child.xpath('.//w:drawing')) > 0 or len(child.xpath('.//v:imagedata')) > 0
+            has_image = 'w:drawing' in child.xml or 'v:imagedata' in child.xml
             style_name = para.style.name if para.style else "Normal"
             
             inferred_role = "body"
