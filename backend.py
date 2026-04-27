@@ -205,13 +205,20 @@ def reconstruct_doc(json_data, template_path, output_path, temp_folder):
         if not blocks:
             blocks = [json_data]
             
-    for block in blocks:
-        if not isinstance(block, dict): continue
+    i = 0
+    while i < len(blocks):
+        block = blocks[i]
+        if not isinstance(block, dict): 
+            i += 1
+            continue
+            
         b_type = block.get("type", "")
         
         if b_type.startswith("heading") or b_type == "paragraph":
             text = block.get("text", "")
-            if not text.strip(): continue
+            if not text.strip(): 
+                i += 1
+                continue
             p = doc.add_paragraph()
             style_name = style_map.get(b_type, "Normal")
             actual_style_name = get_best_style(doc, style_name).name
@@ -234,23 +241,49 @@ def reconstruct_doc(json_data, template_path, output_path, temp_folder):
                     for para in cell.paragraphs:
                         para.alignment = 1
                         for r in para.runs: r.bold = True
-                for i, row in enumerate(rows):
+                for row_idx, row in enumerate(rows):
                     for j, val in enumerate(row):
-                        table.rows[i+1].cells[j].text = str(val)
+                        table.rows[row_idx+1].cells[j].text = str(val)
                 doc.add_paragraph("")
                 
         elif b_type == "image":
-            img_url = block.get("url", "")
-            if img_url:
-                local_img = download_file(img_url, temp_folder)
-                if local_img:
-                    p = doc.add_paragraph(); p.alignment = 1
-                    run = p.add_run(); run.add_picture(local_img, height=Cm(9))
-                    caption = block.get("caption", "")
-                    if caption:
-                        p_cap = doc.add_paragraph(); p_cap.alignment = 1
-                        p_cap.style = get_best_style(doc, "Caption", "Normal").name
-                        run_cap = p_cap.add_run(caption); run_cap.font.italic = True
+            image_blocks = [block]
+            while i + 1 < len(blocks) and isinstance(blocks[i+1], dict) and blocks[i+1].get("type") == "image":
+                image_blocks.append(blocks[i+1])
+                i += 1
+                
+            for j in range(0, len(image_blocks), 2):
+                pair = image_blocks[j:j+2]
+                if len(pair) == 1:
+                    img_url = pair[0].get("url", "")
+                    if img_url:
+                        local_img = download_file(img_url, temp_folder)
+                        if local_img:
+                            p = doc.add_paragraph(); p.alignment = 1
+                            run = p.add_run(); run.add_picture(local_img, height=Cm(10))
+                            caption = pair[0].get("caption", "")
+                            if caption:
+                                p_cap = doc.add_paragraph(); p_cap.alignment = 1
+                                p_cap.style = get_best_style(doc, "Caption", "Normal").name
+                                run_cap = p_cap.add_run(caption); run_cap.font.italic = True
+                else:
+                    table = doc.add_table(rows=2, cols=2)
+                    for col_idx, img_block in enumerate(pair):
+                        img_url = img_block.get("url", "")
+                        if img_url:
+                            local_img = download_file(img_url, temp_folder)
+                            if local_img:
+                                cell_img = table.cell(0, col_idx)
+                                p = cell_img.paragraphs[0]; p.alignment = 1
+                                run = p.add_run(); run.add_picture(local_img, height=Cm(10))
+                                caption = img_block.get("caption", "")
+                                if caption:
+                                    cell_cap = table.cell(1, col_idx)
+                                    p_cap = cell_cap.paragraphs[0]; p_cap.alignment = 1
+                                    p_cap.style = get_best_style(doc, "Caption", "Normal").name
+                                    run_cap = p_cap.add_run(caption); run_cap.font.italic = True
+                    doc.add_paragraph("")
+        i += 1
     doc.save(output_path)
 
 @app.route('/api/status', methods=['GET'])
