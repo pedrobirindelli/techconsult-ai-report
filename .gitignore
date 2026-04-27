@@ -34,3 +34,4 @@ uploads/
 temp_uploads/
 projects/
 .env
+**/.env
