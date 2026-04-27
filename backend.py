@@ -655,6 +655,39 @@ def admin_reset_user_password(user_id):
         return jsonify({"success": True})
     return jsonify({"error": response.text}), response.status_code
 
+@app.route('/api/admin/users/reset-tokens', methods=['PUT'])
+@require_admin
+def admin_reset_all_tokens():
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        return jsonify({"error": "SUPABASE_SERVICE_ROLE_KEY não configurado no backend."}), 500
+        
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    response = requests.get(f"{SUPABASE_URL}/auth/v1/admin/users", headers=headers)
+    if response.status_code != 200:
+        return jsonify({"error": response.text}), response.status_code
+        
+    users_data = response.json()
+    users = users_data.get('users', users_data) if isinstance(users_data, dict) else users_data
+    if not isinstance(users, list):
+        return jsonify({"error": "Formato de usuários inválido"}), 500
+
+    updated = 0
+    for user in users:
+        metadata = user.get("user_metadata", {})
+        if metadata.get("total_tokens_used", 0) > 0:
+            metadata["total_tokens_used"] = 0
+            payload = {"user_metadata": metadata}
+            update_res = requests.put(f"{SUPABASE_URL}/auth/v1/admin/users/{user['id']}", headers=headers, json=payload)
+            if update_res.status_code in [200, 204]:
+                updated += 1
+
+    return jsonify({"success": True, "updated_count": updated})
+
 import tempfile
 @app.route('/api/agent/format', methods=['POST'])
 @require_auth

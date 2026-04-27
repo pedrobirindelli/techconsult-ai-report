@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { ShieldCheck, UserPlus, Users, Loader2, KeyRound, Mail, User, Trash2 } from 'lucide-react';
+import { ShieldCheck, UserPlus, Users, Loader2, KeyRound, Mail, User, Trash2, RefreshCw } from 'lucide-react';
 
 export function AdminPanel() {
   const [users, setUsers] = useState<any[]>([]);
@@ -164,6 +164,38 @@ export function AdminPanel() {
     }
   };
 
+  const handleResetAllTokens = async () => {
+    if (!window.confirm(`Tem certeza que deseja zerar a contagem de tokens de TODOS os usuários?`)) return;
+    
+    setActionLoading('reset-tokens');
+    setError('');
+    setSuccess('');
+    
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session?.access_token) throw new Error('Não autenticado');
+
+      const response = await fetch(`/api/admin/users/reset-tokens`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${session.session.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || 'Erro ao zerar tokens');
+      }
+
+      setSuccess(`Tokens zerados com sucesso para todos os usuários.`);
+      fetchUsers();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-8 animate-fade-in text-slate-800">
       <div className="flex items-center gap-4 border-b border-slate-200 pb-6">
@@ -272,18 +304,27 @@ export function AdminPanel() {
                 <Users className="w-5 h-5 text-blue-500" />
                 Usuários Cadastrados
               </h2>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <div className="bg-indigo-50 border border-indigo-100 rounded-lg px-4 py-1.5 flex items-center gap-2 text-indigo-700">
                   <span className="text-xs uppercase font-bold tracking-wider opacity-70">Total Gasto:</span>
                   <span className="font-mono font-semibold">⚡ {users.reduce((acc, user) => acc + (user.user_metadata?.total_tokens_used || 0), 0).toLocaleString()} tokens</span>
                 </div>
-              <button 
-                onClick={fetchUsers} 
-                disabled={loading}
-                className="text-xs text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 py-1.5 px-3 rounded-lg transition-colors border border-slate-200"
-              >
-                Atualizar Lista
-              </button>
+                <button
+                  onClick={handleResetAllTokens}
+                  disabled={actionLoading === 'reset-tokens'}
+                  className="text-xs text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 py-1.5 px-3 rounded-lg transition-colors border border-amber-200 flex items-center gap-1"
+                  title="Zerar contagem de tokens para todos os usuários"
+                >
+                  {actionLoading === 'reset-tokens' ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                  Zerar Todos
+                </button>
+                <button 
+                  onClick={fetchUsers} 
+                  disabled={loading}
+                  className="text-xs text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 py-1.5 px-3 rounded-lg transition-colors border border-slate-200"
+                >
+                  Atualizar Lista
+                </button>
               </div>
             </div>
 
