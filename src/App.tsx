@@ -1,12 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Upload, Save, FileText, Download, Loader2, FolderOpen, BrainCircuit, Settings, ChevronDown, Trash2, FileSpreadsheet, Play, Brain, FileSignature, DollarSign, LogOut, Users, Smile, CheckCircle2, FilePlus } from 'lucide-react'
+import { Upload, Save, FileText, Download, Loader2, FolderOpen, BrainCircuit, Settings, Trash2, FileSpreadsheet, Play, Brain, FileSignature, DollarSign, LogOut, Users, CheckCircle2, FilePlus } from 'lucide-react'
 import { supabase } from './lib/supabaseClient'
 
-interface SavedPrompt {
-  id: string;
-  title: string;
-  prompt: string;
-}
+
 import Login from './components/Login'
 import { ForcePasswordChange } from './components/ForcePasswordChange'
 import { AdminPanel } from './components/AdminPanel'
@@ -39,16 +35,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [knowledgeRules, setKnowledgeRules] = useState("Sempre utilize os termos técnicos da ABNT NBR 13752. Nunca utilize o adjetivo ruim, substitua por deteriorado ou com anomalias críticas.")
   
-  // Agent State
-  const [agentFile, setAgentFile] = useState<File | null>(null)
-  const [agentPrompt, setAgentPrompt] = useState("Ex: Gere uma capa com o título Laudo e autor Pedro. Pinte todos os subtítulos de azul e centralize as imagens.")
-  const [isAgentRunning, setIsAgentRunning] = useState(false)
-  const [agentResultUrl, setAgentResultUrl] = useState<string | null>(null)
-  const [agentStatus, setAgentStatus] = useState<string | null>(null)
-  // Preview state
-  const [agentPhase, setAgentPhase] = useState<'idle' | 'planning' | 'preview' | 'done'>('idle')
-  const [agentSessionId, setAgentSessionId] = useState<string | null>(null)
-  const [agentHtmlPreview, setAgentHtmlPreview] = useState<string | null>(null)
+
   
   // States para arquivos do projeto
   const [excelFiles, setExcelFiles] = useState<AppFile[]>([])
@@ -73,9 +60,7 @@ export default function App() {
   const [projectHandle, setProjectHandle] = useState<FileSystemDirectoryHandle | null>(null)
   const [isSaving, setIsSaving] = useState(false)
 
-  // Joorrge Prompt Library
-  const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([])
-  const [showPromptList, setShowPromptList] = useState(false)
+
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -92,164 +77,10 @@ export default function App() {
   useEffect(() => {
     if (session) {
       fetchRules()
-      fetchSavedPrompts()
     }
   }, [session])
 
-  const fetchSavedPrompts = async () => {
-    if (!session?.user) return;
-    const { data, error } = await supabase
-      .from('saved_prompts')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (data && !error) {
-      setSavedPrompts(data);
-    }
-  };
 
-  const handleSavePrompt = async () => {
-    if (!agentPrompt.trim()) {
-      alert("Digite uma instrução primeiro antes de salvar.");
-      return;
-    }
-    const title = prompt("Qual o nome desta instrução? (Ex: Padrão Vistoria Caixa)");
-    if (!title) return;
-
-    const { error } = await supabase
-      .from('saved_prompts')
-      .insert([{ user_id: session?.user.id, title, prompt: agentPrompt }]);
-    
-    if (!error) {
-      fetchSavedPrompts();
-      alert("Instrução salva com sucesso na sua biblioteca!");
-    } else {
-      console.error(error);
-      alert("Erro ao salvar a instrução no banco de dados.");
-    }
-  };
-
-  const handleDeletePrompt = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirm("Tem certeza que deseja deletar esta instrução salva?")) return;
-    const { error } = await supabase
-      .from('saved_prompts')
-      .delete()
-      .eq('id', id);
-    if (!error) {
-      fetchSavedPrompts();
-    }
-  };
-
-  const handleAgentPreview = async () => {
-    if (!agentFile) {
-      alert("Selecione um arquivo Word primeiro.");
-      return;
-    }
-    setAgentPhase('planning');
-    setIsAgentRunning(true);
-    setAgentHtmlPreview(null);
-    setAgentSessionId(null);
-    setAgentResultUrl(null);
-    setActualTokens(null);
-    setAgentStatus("Iniciando análise...");
-
-    try {
-      const formData = new FormData();
-      formData.append('file', agentFile);
-      formData.append('prompt', agentPrompt);
-
-      const res = await fetch('/api/agent/preview', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${session?.access_token}` },
-        body: formData
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        let errData;
-        try { errData = JSON.parse(errText); } catch { throw new Error("Erro no servidor. Status: " + res.status); }
-        throw new Error(errData.error || "Erro no Agente");
-      }
-
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      if (!reader) throw new Error("Stream não suportado.");
-
-      let isDone = false;
-      let errorThrown = false;
-      while (!isDone) {
-        const { value, done } = await reader.read();
-        isDone = done;
-        if (value) {
-          const chunkStr = decoder.decode(value, { stream: !done });
-          for (const line of chunkStr.split('\n')) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.substring(6));
-                if (data.error) { errorThrown = true; throw new Error(data.error); }
-                if (data.status) setAgentStatus(data.status);
-                if (data.session_id) {
-                  setAgentSessionId(data.session_id);
-                  setAgentHtmlPreview(data.html_preview || '');
-                  if (data.tokens_used) {
-                    setActualTokens(data.tokens_used);
-                    const currentTokens = session?.user?.user_metadata?.total_tokens_used || 0;
-                    const newTotal = currentTokens + data.tokens_used;
-                    await supabase.auth.updateUser({ data: { total_tokens_used: newTotal } });
-                    if (session?.user) session.user.user_metadata = { ...session.user.user_metadata, total_tokens_used: newTotal };
-                  }
-                  setAgentPhase('preview');
-                }
-              } catch (e: any) {
-                if (errorThrown) throw e;
-                // ignorar parse parcial
-              }
-            }
-          }
-        }
-      }
-    } catch (e: any) {
-      alert(e.message);
-      setAgentPhase('idle');
-    } finally {
-      setAgentStatus(null);
-      setIsAgentRunning(false);
-    }
-  };
-
-  const handleAgentConfirm = async () => {
-    if (!agentSessionId) return;
-    setIsAgentRunning(true);
-    setAgentStatus("Preparando download...");
-    try {
-      const res = await fetch('/api/agent/execute', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: agentSessionId })
-      });
-      if (!res.ok) throw new Error("Erro ao baixar arquivo formatado");
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      setAgentResultUrl(url);
-      setAgentPhase('done');
-      const a = document.createElement('a');
-      a.href = url; a.download = 'Laudo_Formatado_Jorge.docx'; a.click();
-    } catch (e: any) {
-      alert(e.message);
-    } finally {
-      setAgentStatus(null);
-      setIsAgentRunning(false);
-    }
-  };
-
-  const handleAgentReset = () => {
-    setAgentPhase('idle');
-    setAgentSessionId(null);
-    setAgentHtmlPreview(null);
-    setAgentResultUrl(null);
-    setAgentFile(null);
-    setAgentStatus(null);
-  };
 
   const fetchRules = async () => {
     try {
@@ -669,24 +500,15 @@ export default function App() {
           >
             <Brain size={18} /> Comportamento
           </button>
-            {session.user.email === 'pedrobirindelli@gmail.com' && (
-              <>
-                <button
-                  onClick={() => setActiveTab('agente')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'agente' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-white hover:bg-slate-800'}`}
-                >
-                  <Smile size={18} />
-                  <span>Joorrge</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab('admin')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'admin' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-white hover:bg-slate-800'}`}
-                >
-                  <Users size={18} />
-                  <span>Gestão de Usuários</span>
-                </button>
-              </>
-            )}
+          {session.user.email === 'pedrobirindelli@gmail.com' && (
+            <button
+              onClick={() => setActiveTab('admin')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'admin' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-white hover:bg-slate-800'}`}
+            >
+              <Users size={18} />
+              <span>Gestão de Usuários</span>
+            </button>
+          )}
         </nav>
 
         <div className="p-4 border-t border-slate-800 space-y-2">
@@ -904,231 +726,7 @@ export default function App() {
         {activeTab === 'admin' && isMasterAdmin && (
           <AdminPanel />
         )}
-          {activeTab === 'agente' && session.user.email === 'pedrobirindelli@gmail.com' && (
-            <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
-              <div className="bg-gradient-to-br from-indigo-900 to-purple-900 rounded-2xl p-8 text-white shadow-xl">
-                <div className="flex items-center gap-3 mb-4">
-                  <BrainCircuit className="w-8 h-8 text-indigo-300" />
-                  <h1 className="text-2xl font-bold">Jorge, seu Agente de Formatação</h1>
-                </div>
-                <p className="text-indigo-100 opacity-90 max-w-2xl text-sm leading-relaxed">
-                  Olá! Eu sou o Jorge. Estou aqui para ajudar a deixar o seu laudo perfeito! Faça o upload do arquivo Word bruto e me diga exatamente como quer que eu o formate (ex: arrumar a capa, centralizar imagens, padronizar títulos e fontes). Pode me explicar tudo de forma natural, como se estivesse falando com um colega!
-                </p>
-              </div>
-              
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-                <div className="grid md:grid-cols-2 gap-8">
-                  
-                  {/* Arquivo Input */}
-                  <div className="space-y-4">
-                    <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-                      <FileText size={18} className="text-indigo-500" />
-                      1. Laudo Original (Word)
-                    </h3>
-                    <label 
-                      onDragEnter={(e) => e.preventDefault()}
-                      onDragLeave={(e) => e.preventDefault()}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                          setAgentFile(e.dataTransfer.files[0]);
-                        }
-                      }}
-                      className="border-2 border-dashed border-indigo-200 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-indigo-50 hover:border-indigo-400 transition-colors group h-40"
-                    >
-                      <Upload size={24} className="text-indigo-400 group-hover:text-indigo-600 mb-2 transition-colors" />
-                      <span className="text-sm text-indigo-900 font-medium">{agentFile ? agentFile.name : 'Selecionar .docx'}</span>
-                      <input 
-                        type="file" 
-                        accept=".docx"
-                        className="hidden" 
-                        onChange={(e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            setAgentFile(e.target.files[0])
-                          }
-                        }}
-                      />
-                    </label>
-                  </div>
 
-                  {/* Prompt */}
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center relative">
-                      <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-                        <Settings size={18} className="text-indigo-500" />
-                        2. Instruções de Formatação (Prompt)
-                      </h3>
-                      
-                      {/* Biblioteca de Instruções */}
-                      <div className="relative">
-                        <button 
-                          onClick={() => setShowPromptList(!showPromptList)}
-                          className="flex items-center gap-2 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors border border-indigo-200"
-                        >
-                          <FolderOpen size={14} />
-                          Minhas Instruções
-                          <ChevronDown size={14} />
-                        </button>
-                        
-                        {showPromptList && (
-                          <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-200 z-10 overflow-hidden">
-                            <div className="p-2 border-b border-slate-100">
-                              <p className="text-xs font-semibold text-slate-500 px-2 py-1">BIBLIOTECA SALVA</p>
-                            </div>
-                            <div className="max-h-60 overflow-y-auto">
-                              {savedPrompts.length === 0 ? (
-                                <p className="text-xs text-slate-400 p-4 text-center">Nenhuma instrução salva ainda.</p>
-                              ) : (
-                                savedPrompts.map(p => (
-                                  <div 
-                                    key={p.id}
-                                    onClick={() => {
-                                      setAgentPrompt(p.prompt);
-                                      setShowPromptList(false);
-                                    }}
-                                    className="flex items-center justify-between p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0 group"
-                                  >
-                                    <div className="flex-1 min-w-0 pr-2">
-                                      <p className="text-sm font-medium text-slate-800 truncate">{p.title}</p>
-                                      <p className="text-xs text-slate-400 truncate mt-0.5">{p.prompt}</p>
-                                    </div>
-                                    <button 
-                                      onClick={(e) => handleDeletePrompt(p.id, e)}
-                                      className="text-slate-300 hover:text-red-500 p-1.5 rounded-md hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
-                                      title="Excluir instrução"
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
-                                  </div>
-                                ))
-                              )}
-                            </div>
-                            <div className="p-2 bg-slate-50 border-t border-slate-100">
-                              <button
-                                onClick={() => {
-                                  setShowPromptList(false);
-                                  handleSavePrompt();
-                                }}
-                                className="w-full flex items-center justify-center gap-2 text-xs font-medium text-indigo-600 bg-white border border-indigo-200 hover:bg-indigo-50 py-2 rounded-lg transition-colors"
-                              >
-                                <Save size={14} />
-                                Salvar Instrução Atual
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <textarea 
-                      className="w-full h-40 border border-slate-200 rounded-xl p-4 text-sm resize-none focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700 bg-slate-50"
-                      value={agentPrompt}
-                      onChange={(e) => setAgentPrompt(e.target.value)}
-                      placeholder="Descreva as alterações. Ex: Coloque os títulos com fonte Arial 16 em negrito azul. Adicione uma capa com título 'Laudo Técnico' e autor 'Pedro'. Alinhe imagens no centro."
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-8 flex flex-col items-center border-t border-slate-100 pt-8">
-                  {agentStatus && (
-                    <div className="mb-4 text-indigo-600 font-medium animate-pulse flex items-center gap-2">
-                      <Loader2 className="animate-spin" size={18} />
-                      {agentStatus}
-                    </div>
-                  )}
-
-                  {/* Fase IDLE: botão inicial */}
-                  {agentPhase === 'idle' && !isAgentRunning && (
-                    <button 
-                      onClick={handleAgentPreview}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-10 rounded-xl shadow-lg shadow-indigo-600/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-3"
-                    >
-                      <Smile size={20} />
-                      VER PRÉVIA DO JOORRGE
-                    </button>
-                  )}
-
-                  {/* Fase PLANNING: loading */}
-                  {agentPhase === 'planning' && isAgentRunning && (
-                    <div className="flex flex-col items-center justify-center py-6 text-indigo-600 animate-pulse">
-                      <Loader2 className="w-10 h-10 animate-spin mb-4" />
-                      <p className="font-medium text-lg">Joorrge está trabalhando no documento...</p>
-                      <p className="text-sm opacity-70 mt-2">Isso pode levar 1-2 minutos com o modelo Pro.</p>
-                    </div>
-                  )}
-
-                  {/* Fase PREVIEW: exibir HTML e aguardar confirmação */}
-                  {agentPhase === 'preview' && agentHtmlPreview !== null && (
-                    <div className="w-full flex flex-col gap-4">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                          <CheckCircle2 size={18} className="text-emerald-500" />
-                          Prévia do Documento Formatado
-                        </h3>
-                        <span className="text-xs text-slate-400">Revise e confirme ou ajuste as instruções</span>
-                      </div>
-
-                      {/* Visor HTML */}
-                      <div 
-                        className="w-full border border-slate-200 rounded-xl bg-white overflow-auto shadow-inner"
-                        style={{ minHeight: '400px', maxHeight: '600px' }}
-                      >
-                        <div 
-                          className="p-8 prose prose-sm max-w-none text-slate-800"
-                          style={{ fontFamily: 'Georgia, serif', lineHeight: '1.8' }}
-                          dangerouslySetInnerHTML={{ __html: agentHtmlPreview }}
-                        />
-                      </div>
-
-                      {/* Ações */}
-                      <div className="flex flex-col sm:flex-row gap-3 mt-2">
-                        <button
-                          onClick={handleAgentConfirm}
-                          disabled={isAgentRunning}
-                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-xl shadow transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
-                        >
-                          <Download size={18} /> CONFIRMAR E BAIXAR WORD
-                        </button>
-                        <button
-                          onClick={handleAgentReset}
-                          className="flex-1 border border-slate-300 text-slate-600 font-medium py-3 px-6 rounded-xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
-                        >
-                          🔁 Ajustar Instruções
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Fase DONE */}
-                  {agentPhase === 'done' && agentResultUrl && (
-                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 w-full max-w-lg text-center flex flex-col items-center gap-4">
-                      <CheckCircle2 className="w-12 h-12 text-emerald-500" />
-                      <div>
-                        <h3 className="text-lg font-bold text-emerald-900">Download iniciado!</h3>
-                        <p className="text-sm text-emerald-700">O arquivo Word foi gerado e o download começou automaticamente.</p>
-                      </div>
-                      <div className="flex gap-4 w-full mt-2">
-                        <a 
-                          href={agentResultUrl} 
-                          download="Laudo_Formatado_Jorge.docx" 
-                          className="flex-1 bg-emerald-600 text-white px-6 py-3 rounded-lg shadow font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
-                        >
-                          <Download size={18} /> BAIXAR NOVAMENTE
-                        </a>
-                        <button 
-                          onClick={handleAgentReset}
-                          className="px-6 py-3 border border-slate-300 text-slate-600 rounded-lg font-medium hover:bg-slate-50 transition-colors"
-                        >
-                          Novo
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
         </main>
     </div>
   )

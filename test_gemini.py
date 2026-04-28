@@ -2,32 +2,18 @@ import os
 from google import genai
 from dotenv import load_dotenv
 
-# Load environment variables from .env
 load_dotenv()
+api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
-def test_gemini():
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        print("Error: GEMINI_API_KEY not found in .env")
-        return
-
+if not api_key:
+    print("No API key found in .env")
+else:
+    client = genai.Client(api_key=api_key)
     try:
-        # Initialize the client
-        client = genai.Client(api_key=api_key)
-        
-        print("Testing connection to Gemini 1.5 Pro...")
         response = client.models.generate_content(
-            model='gemini-2.5-pro',
-            contents="Diga 'Conexão com Gemini estabelecida com sucesso!' se você me entende."
+            model='gemini-2.5-flash',
+            contents="Hello world"
         )
-        
-        print("\nResposta do Google Gemini:")
-        print("-" * 30)
-        print(response.text)
-        print("-" * 30)
-        
+        print("Success:", response.text)
     except Exception as e:
-        print(f"Failed to connect to Gemini API: {e}")
-
-if __name__ == "__main__":
-    test_gemini()
+        print("Error:", str(e))
