@@ -544,9 +544,15 @@ def download_report(folder_id):
         return "Invalid folder", 400
     
     final_doc = os.path.join(UPLOAD_FOLDER, folder_id, "Resultado.docx")
+    project_name = request.args.get('project_name', 'Laudo_Gerado')
+    # Sanitizar nome do arquivo
+    safe_name = re.sub(r'[^a-zA-Z0-9_\- ]', '_', project_name).strip().replace(' ', '_')
+    download_name = f"{safe_name}_IA.docx"
+    
     if os.path.exists(final_doc):
-        return send_file(final_doc, as_attachment=True, download_name="Relatorio_Gerado.docx")
+        return send_file(final_doc, as_attachment=True, download_name=download_name)
     return "File not found", 404
+
 
 
 @app.route('/api/admin/users', methods=['GET'])

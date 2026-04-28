@@ -271,6 +271,7 @@ export default function App() {
     const activePersistent = savedRules.filter(r => r.active).map(r => r.text).join("\n\n");
     const finalRules = activePersistent + "\n\n" + knowledgeRules + "\nREGRA CRÍTICA: A IA não deve alucinar. Caso uma informação não seja identificada nas fontes previamente informadas, ela deve reportar isso colocando o conteúdo em *itálico*.";
     formData.append('knowledge_rules', finalRules);
+    formData.append('project_name', projectName || 'Laudo');
     
     return formData;
   }
@@ -342,7 +343,8 @@ export default function App() {
                     setGenerationStatus(data.status);
                   }
                   if (data.file_id) {
-                    const downloadRes = await fetch(`/api/download/${data.file_id}`, {
+                    const encodedName = encodeURIComponent(projectName || 'Laudo');
+                    const downloadRes = await fetch(`/api/download/${data.file_id}?project_name=${encodedName}`, {
                       headers: { 'Authorization': `Bearer ${session?.access_token}` }
                     });
                     if (!downloadRes.ok) throw new Error("Erro ao baixar arquivo gerado");
@@ -366,8 +368,11 @@ export default function App() {
                     setDownloadUrl(url);
                     setGenerationStatus(null);
                   }
-                } catch (e) {
-                  // handle incomplete JSON if chunk is broken, though usually SSE sends full lines
+                } catch (parseError: any) {
+                  // Relança erros reais (ex: data.error da IA); ignora apenas JSON incompleto entre chunks
+                  if (!(parseError instanceof SyntaxError)) {
+                    throw parseError;
+                  }
                 }
               }
             }
