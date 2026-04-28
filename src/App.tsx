@@ -45,6 +45,10 @@ export default function App() {
   const [isAgentRunning, setIsAgentRunning] = useState(false)
   const [agentResultUrl, setAgentResultUrl] = useState<string | null>(null)
   const [agentStatus, setAgentStatus] = useState<string | null>(null)
+  // Preview state
+  const [agentPhase, setAgentPhase] = useState<'idle' | 'planning' | 'preview' | 'done'>('idle')
+  const [agentSessionId, setAgentSessionId] = useState<string | null>(null)
+  const [agentHtmlPreview, setAgentHtmlPreview] = useState<string | null>(null)
   
   // States para arquivos do projeto
   const [excelFiles, setExcelFiles] = useState<AppFile[]>([])
@@ -136,87 +140,69 @@ export default function App() {
     }
   };
 
-  const handleAgentSubmit = async () => {
+  const handleAgentPreview = async () => {
     if (!agentFile) {
       alert("Selecione um arquivo Word primeiro.");
       return;
     }
+    setAgentPhase('planning');
     setIsAgentRunning(true);
+    setAgentHtmlPreview(null);
+    setAgentSessionId(null);
     setAgentResultUrl(null);
     setActualTokens(null);
-    setAgentStatus("Lendo arquivo bruto...");
-    
+    setAgentStatus("Iniciando análise...");
+
     try {
       const formData = new FormData();
       formData.append('file', agentFile);
       formData.append('prompt', agentPrompt);
 
-      const res = await fetch('/api/agent/format', {
+      const res = await fetch('/api/agent/preview', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${session?.access_token}` },
         body: formData
       });
-      
+
       if (!res.ok) {
         const errText = await res.text();
         let errData;
-        try {
-          errData = JSON.parse(errText);
-        } catch {
-          throw new Error("Erro no servidor da IA. Status: " + res.status);
-        }
+        try { errData = JSON.parse(errText); } catch { throw new Error("Erro no servidor. Status: " + res.status); }
         throw new Error(errData.error || "Erro no Agente");
       }
-      
+
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
-      if (!reader) throw new Error("Stream não suportado pelo navegador.");
+      if (!reader) throw new Error("Stream não suportado.");
 
       let isDone = false;
+      let errorThrown = false;
       while (!isDone) {
         const { value, done } = await reader.read();
         isDone = done;
         if (value) {
           const chunkStr = decoder.decode(value, { stream: !done });
-          const lines = chunkStr.split('\n');
-          for (const line of lines) {
+          for (const line of chunkStr.split('\n')) {
             if (line.startsWith('data: ')) {
               try {
                 const data = JSON.parse(line.substring(6));
-                if (data.error) {
-                  throw new Error(data.error);
-                }
-                if (data.status) {
-                  setAgentStatus(data.status);
-                }
-                if (data.file_id) {
-                  const downloadRes = await fetch(`/api/download/${data.file_id}`, {
-                    headers: { 'Authorization': `Bearer ${session?.access_token}` }
-                  });
-                  if (!downloadRes.ok) throw new Error("Erro ao baixar arquivo formatado");
-                  const blob = await downloadRes.blob();
-                  const url = window.URL.createObjectURL(blob);
-                  
+                if (data.error) { errorThrown = true; throw new Error(data.error); }
+                if (data.status) setAgentStatus(data.status);
+                if (data.session_id) {
+                  setAgentSessionId(data.session_id);
+                  setAgentHtmlPreview(data.html_preview || '');
                   if (data.tokens_used) {
                     setActualTokens(data.tokens_used);
                     const currentTokens = session?.user?.user_metadata?.total_tokens_used || 0;
                     const newTotal = currentTokens + data.tokens_used;
-                    await supabase.auth.updateUser({
-                      data: { total_tokens_used: newTotal }
-                    });
-                    if (session?.user) {
-                      session.user.user_metadata = { ...session.user.user_metadata, total_tokens_used: newTotal };
-                    }
+                    await supabase.auth.updateUser({ data: { total_tokens_used: newTotal } });
+                    if (session?.user) session.user.user_metadata = { ...session.user.user_metadata, total_tokens_used: newTotal };
                   }
-                  
-                  setAgentResultUrl(url);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = 'Laudo_Formatado_Jorge.docx';
-                  a.click();
+                  setAgentPhase('preview');
                 }
-              } catch (parseErr) {
-                // ignorar erros de parse JSON incompleto no stream
+              } catch (e: any) {
+                if (errorThrown) throw e;
+                // ignorar parse parcial
               }
             }
           }
@@ -224,11 +210,46 @@ export default function App() {
       }
     } catch (e: any) {
       alert(e.message);
+      setAgentPhase('idle');
     } finally {
       setAgentStatus(null);
       setIsAgentRunning(false);
     }
-  }
+  };
+
+  const handleAgentConfirm = async () => {
+    if (!agentSessionId) return;
+    setIsAgentRunning(true);
+    setAgentStatus("Preparando download...");
+    try {
+      const res = await fetch('/api/agent/execute', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: agentSessionId })
+      });
+      if (!res.ok) throw new Error("Erro ao baixar arquivo formatado");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      setAgentResultUrl(url);
+      setAgentPhase('done');
+      const a = document.createElement('a');
+      a.href = url; a.download = 'Laudo_Formatado_Jorge.docx'; a.click();
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setAgentStatus(null);
+      setIsAgentRunning(false);
+    }
+  };
+
+  const handleAgentReset = () => {
+    setAgentPhase('idle');
+    setAgentSessionId(null);
+    setAgentHtmlPreview(null);
+    setAgentResultUrl(null);
+    setAgentFile(null);
+    setAgentStatus(null);
+  };
 
   const fetchRules = async () => {
     try {
@@ -1016,46 +1037,87 @@ export default function App() {
                       {agentStatus}
                     </div>
                   )}
-                  {!isAgentRunning && !agentResultUrl && (
+
+                  {/* Fase IDLE: botão inicial */}
+                  {agentPhase === 'idle' && !isAgentRunning && (
                     <button 
-                      onClick={handleAgentSubmit}
+                      onClick={handleAgentPreview}
                       className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-10 rounded-xl shadow-lg shadow-indigo-600/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-3"
                     >
                       <Smile size={20} />
-                      CHAMAR O JOORRGE
+                      VER PRÉVIA DO JOORRGE
                     </button>
                   )}
 
-                  {isAgentRunning && (
+                  {/* Fase PLANNING: loading */}
+                  {agentPhase === 'planning' && isAgentRunning && (
                     <div className="flex flex-col items-center justify-center py-6 text-indigo-600 animate-pulse">
                       <Loader2 className="w-10 h-10 animate-spin mb-4" />
-                      <p className="font-medium text-lg">A IA está processando as instruções e manipulando o Word...</p>
-                      <p className="text-sm opacity-70 mt-2">Isso pode levar cerca de 1 minuto.</p>
+                      <p className="font-medium text-lg">Joorrge está trabalhando no documento...</p>
+                      <p className="text-sm opacity-70 mt-2">Isso pode levar 1-2 minutos com o modelo Pro.</p>
                     </div>
                   )}
 
-                  {agentResultUrl && (
+                  {/* Fase PREVIEW: exibir HTML e aguardar confirmação */}
+                  {agentPhase === 'preview' && agentHtmlPreview !== null && (
+                    <div className="w-full flex flex-col gap-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                          <CheckCircle2 size={18} className="text-emerald-500" />
+                          Prévia do Documento Formatado
+                        </h3>
+                        <span className="text-xs text-slate-400">Revise e confirme ou ajuste as instruções</span>
+                      </div>
+
+                      {/* Visor HTML */}
+                      <div 
+                        className="w-full border border-slate-200 rounded-xl bg-white overflow-auto shadow-inner"
+                        style={{ minHeight: '400px', maxHeight: '600px' }}
+                      >
+                        <div 
+                          className="p-8 prose prose-sm max-w-none text-slate-800"
+                          style={{ fontFamily: 'Georgia, serif', lineHeight: '1.8' }}
+                          dangerouslySetInnerHTML={{ __html: agentHtmlPreview }}
+                        />
+                      </div>
+
+                      {/* Ações */}
+                      <div className="flex flex-col sm:flex-row gap-3 mt-2">
+                        <button
+                          onClick={handleAgentConfirm}
+                          disabled={isAgentRunning}
+                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-xl shadow transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          <Download size={18} /> CONFIRMAR E BAIXAR WORD
+                        </button>
+                        <button
+                          onClick={handleAgentReset}
+                          className="flex-1 border border-slate-300 text-slate-600 font-medium py-3 px-6 rounded-xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+                        >
+                          🔁 Ajustar Instruções
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fase DONE */}
+                  {agentPhase === 'done' && agentResultUrl && (
                     <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 w-full max-w-lg text-center flex flex-col items-center gap-4">
                       <CheckCircle2 className="w-12 h-12 text-emerald-500" />
                       <div>
-                        <h3 className="text-lg font-bold text-emerald-900">Documento Formatado com Sucesso!</h3>
-                        <p className="text-sm text-emerald-700">As instruções foram aplicadas pelo Agente Especialista.</p>
+                        <h3 className="text-lg font-bold text-emerald-900">Download iniciado!</h3>
+                        <p className="text-sm text-emerald-700">O arquivo Word foi gerado e o download começou automaticamente.</p>
                       </div>
                       <div className="flex gap-4 w-full mt-2">
-                        {agentResultUrl !== "saved" && agentResultUrl !== "cancelled" && (
-                          <a 
-                            href={agentResultUrl} 
-                            download="Laudo_Formatado_Agente.docx" 
-                            className="flex-1 bg-emerald-600 text-white px-6 py-3 rounded-lg shadow font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
-                          >
-                            <Download size={18} /> BAIXAR WORD
-                          </a>
-                        )}
+                        <a 
+                          href={agentResultUrl} 
+                          download="Laudo_Formatado_Jorge.docx" 
+                          className="flex-1 bg-emerald-600 text-white px-6 py-3 rounded-lg shadow font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Download size={18} /> BAIXAR NOVAMENTE
+                        </a>
                         <button 
-                          onClick={() => {
-                            setAgentResultUrl(null);
-                            setAgentFile(null);
-                          }}
+                          onClick={handleAgentReset}
                           className="px-6 py-3 border border-slate-300 text-slate-600 rounded-lg font-medium hover:bg-slate-50 transition-colors"
                         >
                           Novo

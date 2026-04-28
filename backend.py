@@ -688,7 +688,149 @@ def admin_reset_all_tokens():
 
     return jsonify({"success": True, "updated_count": updated})
 
+PLAN_ACTIONS_DOC = (
+    "Ações disponíveis:\n"
+    "- add_cover: Cria uma capa com título, subtítulo e autor\n"
+    "- insert_toc: Insere um índice dinâmico com links\n"
+    "- replace_toc: Substitui índice antigo por um novo dinâmico\n"
+    "- page_break_before_headings: Adiciona quebra de página antes de cada capítulo\n"
+    "- format_class: Formata classe de texto (titulo/subtitulo/texto/legenda) com fonte, tamanho, cor, negrito, itálico\n"
+    "- format_specific_text: Busca e formata um texto específico com cor de texto e fundo\n"
+    "- align_component: Alinha texto/imagem/tabela/titulo (left/center/right/justify)\n"
+    "- resize_images: Redimensiona todas as imagens (width_cm e/ou height_cm)\n"
+    "- add_signature_block: Adiciona bloco de assinaturas ao final\n"
+)
+
+SYS_INST_PLAN = (
+    "Você é o Joorrge, um Agente Arquiteto e Especialista em Formatação do Microsoft Word. "
+    "Você receberá o MAPA ESTRUTURAL do documento e o PEDIDO do usuário. "
+    "Retorne EXCLUSIVAMENTE um array JSON de ações técnicas para execução.\n"
+    + PLAN_ACTIONS_DOC +
+    "Exemplo de retorno:\n"
+    "[\n"
+    "  {\"action\": \"add_cover\", \"params\": {\"title\": \"Laudo Técnico\", \"subtitle\": \"\", \"author\": \"TechConsult\"}},\n"
+    "  {\"action\": \"replace_toc\", \"params\": {}},\n"
+    "  {\"action\": \"format_class\", \"params\": {\"text_class\": \"titulo\", \"color_hex\": \"#003DA5\", \"size_pt\": 16, \"bold\": true, \"italic\": false}},\n"
+    "  {\"action\": \"resize_images\", \"params\": {\"width_cm\": 15}}\n"
+    "]"
+)
+
 import tempfile
+
+@app.route('/api/agent/preview', methods=['POST'])
+@require_auth
+def agent_preview():
+    """Gera prévia visual HTML do documento formatado."""
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "Nenhum arquivo enviado"}), 400
+        
+        file = request.files['file']
+        prompt_text = request.form.get('prompt', '')
+        
+        session_id = uuid.uuid4().hex
+        run_folder = os.path.join(UPLOAD_FOLDER, session_id)
+        os.makedirs(run_folder, exist_ok=True)
+        
+        input_path = os.path.join(run_folder, "input.docx")
+        output_path = os.path.join(run_folder, "Resultado.docx")
+        file.save(input_path)
+        
+        def generate_preview_stream():
+            try:
+                yield f"data: {json.dumps({'status': 'Lendo estrutura do documento...'})}\n\n"
+                structure_map = format_agent.analyze_document_structure(input_path)
+                context_json = json.dumps(structure_map, ensure_ascii=False)
+                if len(context_json) > 150000:
+                    context_json = context_json[:150000] + "\n... [TRUNCADO]"
+                
+                user_msg = f"MAPA ESTRUTURAL DO DOCX:\n{context_json}\n\nPEDIDO DO USUÁRIO:\n{prompt_text}"
+                
+                yield f"data: {json.dumps({'status': 'Joorrge está elaborando a estratégia...'})}\n\n"
+                
+                import re
+                response_stream = client.models.generate_content(
+                    model='gemini-2.5-pro',
+                    contents=user_msg,
+                    config=genai.types.GenerateContentConfig(
+                        system_instruction=SYS_INST_PLAN,
+                        response_mime_type="application/json"
+                    ),
+                    stream=True
+                )
+                
+                raw_text = ""
+                for chunk in response_stream:
+                    if chunk.text:
+                        raw_text += chunk.text
+                        yield f"data: {json.dumps({'ping': True})}\n\n"
+                
+                raw_text = raw_text.strip()
+                match = re.search(r'\[.*\]', raw_text, re.DOTALL)
+                if match:
+                    raw_text = match.group(0)
+                
+                plan_steps = json.loads(raw_text)
+                
+                yield f"data: {json.dumps({'status': 'Aplicando formatação no documento...'})}\n\n"
+                format_agent.execute_formatting_plan(input_path, plan_steps, output_path)
+                
+                yield f"data: {json.dumps({'status': 'Gerando prévia visual...'})}\n\n"
+                try:
+                    import mammoth
+                    with open(output_path, 'rb') as docx_file:
+                        result = mammoth.convert_to_html(docx_file)
+                        html_content = result.value
+                except ImportError:
+                    html_content = "<p><em>Biblioteca de prévia não instalada. Por favor instale: pip install mammoth</em></p>"
+                except Exception as conv_e:
+                    html_content = f"<p><em>Erro ao gerar prévia: {conv_e}</em></p>"
+                
+                tokens_used = len(context_json) // 4 + len(raw_text) // 4
+                yield f"data: {json.dumps({'status': 'Prévia pronta!', 'session_id': session_id, 'html_preview': html_content, 'tokens_used': tokens_used})}\n\n"
+            
+            except Exception as e:
+                print(f"Erro no preview SSE: {e}")
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        
+        resp = Response(stream_with_context(generate_preview_stream()), mimetype='text/event-stream')
+        resp.headers['X-Accel-Buffering'] = 'no'
+        resp.headers['Cache-Control'] = 'no-cache'
+        resp.headers['Connection'] = 'keep-alive'
+        return resp
+    
+    except Exception as e:
+        print(f"Erro no agent/preview: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/agent/execute', methods=['POST'])
+@require_auth
+def agent_execute():
+    """Fase 2: Serve o arquivo já gerado pela prévia."""
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id')
+        
+        if not session_id:
+            return jsonify({"error": "session_id é obrigatório"}), 400
+        
+        import re
+        if not re.match(r'^[a-zA-Z0-9]+$', session_id):
+            return jsonify({"error": "session_id inválido"}), 400
+        
+        run_folder = os.path.join(UPLOAD_FOLDER, session_id)
+        output_path = os.path.join(run_folder, "Resultado.docx")
+        
+        if not os.path.exists(output_path):
+            return jsonify({"error": "Sessão não encontrada ou expirada"}), 404
+        
+        return send_file(output_path, as_attachment=True, download_name="Laudo_Formatado_Jorge.docx")
+    
+    except Exception as e:
+        print(f"Erro no agent/execute: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# Manter rota antiga como alias
 @app.route('/api/agent/format', methods=['POST'])
 @require_auth
 def format_document_agent():
