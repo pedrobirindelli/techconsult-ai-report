@@ -1,10 +1,11 @@
-﻿import os
+import os
 import time
 import shutil
 import json
 import uuid
 import threading
 import queue
+import tempfile
 import docx
 import pandas as pd
 import requests
