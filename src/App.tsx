@@ -296,16 +296,45 @@ export default function App() {
     return formData;
   }
 
-  const handlePrepareMedia = async () => {
-    if (excelFiles.length === 0) {
-      setErrorMsg("Selecione ao menos 1 Planilha Excel.");
+  const handleAutoGenerate = async () => {
+    if (excelFiles.length === 0 || templateFiles.length === 0) {
+      setErrorMsg("Selecione ao menos 1 Planilha Excel e 1 Laudo de Referência.");
       return;
     }
-    setIsPreparingMedia(true);
+    
     setErrorMsg('');
+    setDownloadUrl(null);
+    setActualTokens(null);
+    setEstimation(null);
+
+    // --- FASE 1: ESTIMATIVA ---
+    setIsEstimating(true);
+    setPreparationStatus('Estimando complexidade do laudo...');
+    try {
+      const body = await buildFormData();
+      const res = await fetch('/estimate', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session?.access_token}` },
+        body
+      });
+      if (!res.ok) throw new Error("Falha ao calcular estimativa");
+      const data = await res.json();
+      setEstimation(data);
+    } catch (err: any) {
+      setErrorMsg(err.message);
+      setIsEstimating(false);
+      setPreparationStatus(null);
+      return; // Para se der erro
+    }
+    setIsEstimating(false);
+
+    // --- FASE 2: PREPARAÇÃO ---
+    setIsPreparingMedia(true);
     setPreparationStatus('Iniciando envio das mídias...');
     setPreparedMedia(null);
+    setGenerationStatus(null);
     
+    let preparedData = null;
     try {
       const formData = new FormData();
       for (const f of excelFiles) formData.append('excel_files', await getFileFromAppFile(f));
@@ -340,10 +369,11 @@ export default function App() {
                   if (data.status) setPreparationStatus(data.status);
                   
                   if (data.gemini_names && data.media_mapping) {
-                    setPreparedMedia({
+                    preparedData = {
                       gemini_names: data.gemini_names,
                       media_mapping: data.media_mapping
-                    });
+                    };
+                    setPreparedMedia(preparedData);
                   }
                 } catch (e: any) {
                   if (!(e instanceof SyntaxError)) throw e;
@@ -355,46 +385,33 @@ export default function App() {
       }
     } catch (err: any) {
       setErrorMsg(err.message || "Erro desconhecido ao preparar mídias");
-    } finally {
       setIsPreparingMedia(false);
       setPreparationStatus(null);
+      return; // Para a execução
     }
-  }
-
-  const handleEstimate = async () => {
-    if (excelFiles.length === 0 || templateFiles.length === 0) {
-      setErrorMsg("Selecione ao menos 1 Planilha Excel e 1 Laudo de Referência.");
+    setIsPreparingMedia(false);
+    
+    if (!preparedData) {
+      setErrorMsg("Falha ao preparar mídias. Nenhum dado retornado da IA.");
+      setPreparationStatus(null);
       return;
     }
-    setIsEstimating(true);
-    setErrorMsg('');
-    try {
-      const body = await buildFormData();
-      const res = await fetch('/estimate', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${session?.access_token}` },
-        body
-      });
-      if (!res.ok) throw new Error("Falha ao calcular estimativa");
-      const data = await res.json();
-      setEstimation(data);
-    } catch (err: any) {
-      setErrorMsg(err.message);
-    } finally {
-      setIsEstimating(false);
-    }
-  }
 
-  const handleConfirmGenerate = async () => {
-    setEstimation(null);
+    // --- FASE 3: GERAÇÃO ---
     setIsGenerating(true);
-    setErrorMsg('');
-    setDownloadUrl(null);
-    setActualTokens(null);
-    setGenerationStatus('Preparando arquivos para envio...');
+    setGenerationStatus('Preparando arquivos finais para a IA...');
     
     try {
-      const body = await buildFormData();
+      const body = new FormData();
+      for (const f of excelFiles) body.append('excel_files', await getFileFromAppFile(f));
+      for (const f of templateFiles) body.append('template_files', await getFileFromAppFile(f));
+      for (const f of sourceFiles) body.append('source_files', await getFileFromAppFile(f));
+      if (visualTemplate) body.append('visual_template', await getFileFromAppFile(visualTemplate));
+      if (knowledgeRules) body.append('knowledge_rules', knowledgeRules);
+      
+      body.append('gemini_names', JSON.stringify(preparedData.gemini_names));
+      body.append('media_mapping', preparedData.media_mapping);
+
       const response = await fetch('/generate', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${session?.access_token}` },
@@ -451,10 +468,9 @@ export default function App() {
                     }
                     
                     setDownloadUrl(url);
-                    setGenerationStatus(null);
+                    setGenerationStatus("Laudo gerado com sucesso!");
                   }
                 } catch (parseError: any) {
-                  // Relança erros reais (ex: data.error da IA); ignora apenas JSON incompleto entre chunks
                   if (!(parseError instanceof SyntaxError)) {
                     throw parseError;
                   }
@@ -467,9 +483,9 @@ export default function App() {
       
     } catch (err: any) {
       setErrorMsg(err.message || "Erro desconhecido");
-      setGenerationStatus(null);
     } finally {
       setIsGenerating(false);
+      setPreparationStatus(null);
     }
   }
 
@@ -533,39 +549,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex relative">
-      {/* Estimation Modal */}
-      {estimation && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in duration-200">
-            <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <DollarSign className="text-amber-500" />
-              Confirmação de Custo da IA
-            </h3>
-            
-            <div className="space-y-3 mb-6 bg-slate-50 p-4 rounded-lg border border-slate-200">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-600">Mídias Detectadas:</span>
-                <span className="font-bold text-slate-800">{estimation.media_count}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-600">Volume de Texto:</span>
-                <span className="font-bold text-slate-800">{estimation.text_tokens.toLocaleString()} tokens</span>
-              </div>
-              <div className="flex justify-between text-lg mt-2 pt-2 border-t border-slate-200">
-                <span className="text-slate-800 font-semibold">Custo Estimado (US$):</span>
-                <span className="font-bold text-emerald-600">${estimation.estimated_usd.toFixed(4)}</span>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setEstimation(null)} className="px-4 py-2 rounded-lg text-slate-600 font-semibold hover:bg-slate-100 transition">Cancelar</button>
-              <button onClick={handleConfirmGenerate} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold shadow hover:bg-blue-700 transition flex items-center gap-2">
-                Continuar e Gerar <Play size={16} />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* UI simplificada - Modal removido pois o fluxo é contínuo */}
 
       {/* Sidebar */}
       <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col">
@@ -738,54 +722,39 @@ export default function App() {
                     <p className="font-bold flex items-center gap-1"><Brain size={14} className="text-blue-500" /> IA: Gemini 2.5 Pro</p>
                     <p className="mt-1 italic">Os arquivos serão processados na nuvem e retornados para o seu computador.</p>
                   </div>
-                  <button onClick={handleEstimate} disabled={isEstimating || isGenerating} className="text-blue-600 hover:text-blue-800 font-bold text-sm transition-all flex items-center gap-2">
-                    <DollarSign size={16} /> ESTIMAR CUSTO
-                  </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 mt-2">
-                  {/* Step 1 */}
-                  <div className={`p-4 rounded-xl border-2 transition-all ${preparedMedia ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
-                      <div className="flex justify-between items-center mb-3">
-                          <h3 className={`font-bold ${preparedMedia ? 'text-emerald-700' : 'text-slate-700'}`}>1. Preparar Mídias</h3>
-                          {preparedMedia && <CheckCircle2 size={20} className="text-emerald-500" />}
+              <div className="mt-4">
+                  {estimation && !isGenerating && !isPreparingMedia && !actualTokens && (
+                      <div className="mb-4 text-xs font-mono bg-amber-50 text-amber-800 px-3 py-2 rounded border border-amber-200">
+                        ⚡ Custo Estimado da Última Geração: {estimation.text_tokens.toLocaleString()} tokens (~${estimation.estimated_usd.toFixed(4)})
                       </div>
-                      <p className="text-xs text-slate-500 mb-4 h-8">Faz o upload e processamento das fotos no servidor da IA.</p>
-                      
-                      <button 
-                        onClick={handlePrepareMedia}
-                        disabled={isPreparingMedia || excelFiles.length === 0}
-                        className={`w-full py-3 rounded-lg font-bold shadow-sm transition-all flex items-center justify-center gap-2 ${preparedMedia ? 'bg-white text-emerald-600 border border-emerald-200 hover:bg-emerald-50' : 'bg-slate-800 text-white hover:bg-slate-900 disabled:opacity-50'}`}
-                      >
-                        {isPreparingMedia ? <><Loader2 size={18} className="animate-spin"/> PROCESSANDO...</> : preparedMedia ? "REFAZER PREPARO" : "INICIAR PREPARO"}
-                      </button>
-                      
-                      {preparationStatus && (
-                        <p className="mt-3 text-xs text-indigo-600 font-medium flex items-center gap-1">
-                          {isPreparingMedia && <Loader2 className="w-3 h-3 animate-spin" />} {preparationStatus}
-                        </p>
-                      )}
-                  </div>
-
-                  {/* Step 2 */}
-                  <div className={`p-4 rounded-xl border-2 transition-all ${preparedMedia ? 'bg-blue-50 border-blue-200 shadow-md' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
-                      <h3 className="font-bold text-blue-800 mb-3">2. Gerar Laudo</h3>
-                      <p className="text-xs text-blue-600/70 mb-4 h-8">Gera o texto com a IA e monta o arquivo Word final.</p>
-                      
-                      <button 
-                        onClick={handleConfirmGenerate}
-                        disabled={!preparedMedia || isGenerating}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isGenerating ? <><Loader2 size={18} className="animate-spin"/> GERANDO...</> : <><BrainCircuit size={18} /> GERAR RESULTADO</>}
-                      </button>
-                      
-                      {generationStatus && (
-                        <p className="mt-3 text-xs text-blue-600 font-medium flex items-center gap-1">
-                          {isGenerating && <Loader2 className="w-3 h-3 animate-spin" />} {generationStatus}
-                        </p>
-                      )}
-                  </div>
+                  )}
+                  <button 
+                    onClick={handleAutoGenerate}
+                    disabled={isPreparingMedia || isGenerating || isEstimating || excelFiles.length === 0}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-bold shadow-md transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {(isPreparingMedia || isGenerating || isEstimating) ? <><Loader2 size={24} className="animate-spin"/> PROCESSANDO LAUDO...</> : <><BrainCircuit size={24} /> GERAR LAUDO COMPLETO</>}
+                  </button>
+                  
+                  {(preparationStatus || generationStatus) && !downloadUrl && (
+                    <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-lg">
+                      <h4 className="text-sm font-bold text-blue-800 mb-2">Status da Operação:</h4>
+                      <ul className="text-xs space-y-2 text-blue-700 font-medium">
+                        {preparationStatus && (
+                          <li className="flex items-center gap-2">
+                            {(isPreparingMedia || isEstimating) ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3 text-emerald-500" />} 
+                            {preparationStatus}
+                          </li>
+                        )}
+                        {generationStatus && (
+                          <li className="flex items-center gap-2">
+                            {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3 text-emerald-500" />} 
+                            {generationStatus}
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
               </div>
             </div>
 
