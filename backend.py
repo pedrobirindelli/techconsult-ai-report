@@ -348,6 +348,81 @@ def estimate_cost():
         })
     except Exception as e: return jsonify({"error": str(e)}), 500
 
+@app.route('/prepare_media', methods=['POST'])
+@require_auth
+def prepare_media():
+    try:
+        excel_files = request.files.getlist('excel_files')
+        folder_id = uuid.uuid4().hex
+        run_folder = os.path.join(UPLOAD_FOLDER, folder_id)
+        os.makedirs(run_folder, exist_ok=True)
+        
+        def prepare_stream():
+            try:
+                url_to_local = {}
+                yield f"data: {json.dumps({'status': 'Lendo planilhas e identificando mídias...', 'step': 1})}\n\n"
+                
+                for idx, excel in enumerate(excel_files):
+                    path = os.path.join(run_folder, f"data_{idx}.xlsx")
+                    excel.save(path)
+                    try:
+                        df = pd.read_excel(path)
+                        for val in df.values.flatten():
+                            if isinstance(val, str):
+                                for url in extract_urls(val):
+                                    if 'supabase.co' in url:
+                                        local = download_file(url, run_folder)
+                                        if local: url_to_local[url] = local
+                    except: pass
+                
+                gemini_names = []
+                media_mapping = "\nMAPEAMENTO DE IMAGENS:\n"
+                
+                media_files = [local for local in url_to_local.values() if local.lower().endswith(('.jpeg', '.jpg', '.png', '.webp', '.mp3', '.m4a', '.wav', '.ogg', '.mp4', '.avi', '.mov'))]
+                total_media = len(media_files)
+                processed = 0
+                
+                if total_media > 0:
+                    yield f"data: {json.dumps({'status': f'Iniciando envio de {total_media} mídias para a IA...', 'step': 2})}\n\n"
+                    
+                for url, local in url_to_local.items():
+                    if local.lower().endswith(('.jpeg', '.jpg', '.png', '.webp', '.mp3', '.m4a', '.wav', '.ogg', '.mp4', '.avi', '.mov')):
+                        processed += 1
+                        try:
+                            filename = os.path.basename(local)
+                            friendly_name = os.path.basename(url).split('?')[0][-20:]
+                            yield f"data: {json.dumps({'status': f'Enviando mídia {processed}/{total_media} ({friendly_name})...', 'step': 2})}\n\n"
+                            
+                            g_file = client.files.upload(file=local)
+                            while g_file.state.name == "PROCESSING":
+                                time.sleep(2)
+                                g_file = client.files.get(name=g_file.name)
+                                yield f"data: {json.dumps({'status': f'Aguardando processamento ({friendly_name})...', 'step': 2})}\n\n"
+                            
+                            if g_file.state.name == "ACTIVE":
+                                gemini_names.append(g_file.name)
+                                media_mapping += f"- {filename} -> {url}\n"
+                                yield f"data: {json.dumps({'status': f'Mídia {processed}/{total_media} pronta!', 'step': 2})}\n\n"
+                            else:
+                                yield f"data: {json.dumps({'status': f'Aviso: A mídia {friendly_name} falhou (status: {g_file.state.name}).', 'step': 2})}\n\n"
+                                
+                        except Exception as e:
+                            yield f"data: {json.dumps({'status': f'Aviso: Erro ao enviar {friendly_name} ({str(e)}).', 'step': 2})}\n\n"
+
+                yield f"data: {json.dumps({'status': 'Preparo de mídias concluído!', 'step': 3, 'gemini_names': gemini_names, 'media_mapping': media_mapping})}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'error': f'Erro ao preparar mídias: {str(e)}'})}\n\n"
+            finally:
+                shutil.rmtree(run_folder, ignore_errors=True)
+        
+        response = Response(stream_with_context(prepare_stream()), mimetype='text/event-stream')
+        response.headers['X-Accel-Buffering'] = 'no'
+        response.headers['Cache-Control'] = 'no-cache'
+        response.headers['Connection'] = 'keep-alive'
+        return response
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/generate', methods=['POST'])
 @require_auth
 def generate_report():
@@ -357,6 +432,13 @@ def generate_report():
         source_files = request.files.getlist('source_files')
         visual_template = request.files.get('visual_template')
         rules = request.form.get('knowledge_rules', '')
+        gemini_names_json = request.form.get('gemini_names', '[]')
+        media_mapping = request.form.get('media_mapping', '')
+        
+        try:
+            gemini_names = json.loads(gemini_names_json)
+        except:
+            gemini_names = []
 
         folder_id = uuid.uuid4().hex
         run_folder = os.path.join(UPLOAD_FOLDER, folder_id)
@@ -392,29 +474,16 @@ def generate_report():
                             yield f"data: {json.dumps({'status': f'Analisando apontamento: \"{sample_val}\"', 'step': 2})}\n\n"
                             
                         all_excel_str += f"\n[Arquivo {idx+1}]\n" + df.to_json(orient="records", force_ascii=False)
-                        for val in df.values.flatten():
-                            if isinstance(val, str):
-                                for url in extract_urls(val):
-                                    if 'supabase.co' in url:
-                                        local = download_file(url, run_folder)
-                                        if local: url_to_local[url] = local
                     except: pass
 
-                yield f"data: {json.dumps({'status': 'Preparando mídias para visão computacional...', 'step': 3})}\n\n"
+                yield f"data: {json.dumps({'status': 'Carregando mídias preparadas...', 'step': 3})}\n\n"
                 gemini_files = []
-                media_mapping = "\nMAPEAMENTO DE IMAGENS:\n"
-                for url, local in url_to_local.items():
-                    if local.lower().endswith(('.jpeg', '.jpg', '.png', '.webp', '.mp3', '.m4a', '.wav', '.ogg', '.mp4', '.avi', '.mov')):
-                        try:
-                            filename = os.path.basename(url).split('?')[0][-20:]
-                            yield f"data: {json.dumps({'status': f'Processando evidência de campo... ({filename})', 'step': 3})}\n\n"
-                            g_file = client.files.upload(file=local)
-                            while g_file.state.name == "PROCESSING":
-                                time.sleep(1)
-                                g_file = client.files.get(name=g_file.name)
+                for name in gemini_names:
+                    try:
+                        g_file = client.files.get(name=name)
+                        if g_file.state.name == "ACTIVE":
                             gemini_files.append(g_file)
-                            media_mapping += f"- {os.path.basename(local)} -> {url}\n"
-                        except: pass
+                    except: pass
 
                 yield f"data: {json.dumps({'status': 'Mapeando referências e fontes normativas...', 'step': 4})}\n\n"
                 all_ref_text = ""

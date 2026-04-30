@@ -55,6 +55,12 @@ export default function App() {
   const [actualTokens, setActualTokens] = useState<number | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
   const [generationStatus, setGenerationStatus] = useState<string | null>(null)
+  
+  // States para Preparação de Mídia
+  const [isPreparingMedia, setIsPreparingMedia] = useState(false)
+  const [preparedMedia, setPreparedMedia] = useState<{gemini_names: string[], media_mapping: string} | null>(null)
+  const [preparationStatus, setPreparationStatus] = useState<string | null>(null)
+
   // Gerenciamento Local
   const [projectName, setProjectName] = useState('')
   const [projectHandle, setProjectHandle] = useState<FileSystemDirectoryHandle | null>(null)
@@ -131,11 +137,17 @@ export default function App() {
         file: f
       }))
       setter(prev => [...prev, ...newFiles])
+      if (setter === setExcelFiles) {
+        setPreparedMedia(null)
+      }
     }
   }
 
   const removeFile = (name: string, setter: React.Dispatch<React.SetStateAction<AppFile[]>>) => {
     setter(prev => prev.filter(f => f.name !== name))
+    if (setter === setExcelFiles) {
+      setPreparedMedia(null)
+    }
   }
 
   const handleNewProject = () => {
@@ -150,6 +162,9 @@ export default function App() {
     setDownloadUrl(null)
     setActualTokens(null)
     setErrorMsg("")
+    setPreparedMedia(null)
+    setIsPreparingMedia(false)
+    setPreparationStatus(null)
   }
 
   const handleSelectFolder = async () => {
@@ -268,12 +283,82 @@ export default function App() {
     for (const f of sourceFiles) formData.append('source_files', await getFileFromAppFile(f));
     if (visualTemplate) formData.append('visual_template', await getFileFromAppFile(visualTemplate));
 
+    if (preparedMedia) {
+      formData.append('gemini_names', JSON.stringify(preparedMedia.gemini_names));
+      formData.append('media_mapping', preparedMedia.media_mapping);
+    }
+
     const activePersistent = savedRules.filter(r => r.active).map(r => r.text).join("\n\n");
     const finalRules = activePersistent + "\n\n" + knowledgeRules + "\nREGRA CRÍTICA: A IA não deve alucinar. Caso uma informação não seja identificada nas fontes previamente informadas, ela deve reportar isso colocando o conteúdo em *itálico*.";
     formData.append('knowledge_rules', finalRules);
     formData.append('project_name', projectName || 'Laudo');
     
     return formData;
+  }
+
+  const handlePrepareMedia = async () => {
+    if (excelFiles.length === 0) {
+      setErrorMsg("Selecione ao menos 1 Planilha Excel.");
+      return;
+    }
+    setIsPreparingMedia(true);
+    setErrorMsg('');
+    setPreparationStatus('Iniciando envio das mídias...');
+    setPreparedMedia(null);
+    
+    try {
+      const formData = new FormData();
+      for (const f of excelFiles) formData.append('excel_files', await getFileFromAppFile(f));
+      
+      const response = await fetch('/prepare_media', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session?.access_token}` },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Erro no servidor ao preparar mídias.");
+      }
+      
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder("utf-8");
+      
+      if (reader) {
+        let done = false;
+        while (!done) {
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
+          if (value) {
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.substring(6));
+                  if (data.error) throw new Error(data.error);
+                  if (data.status) setPreparationStatus(data.status);
+                  
+                  if (data.gemini_names && data.media_mapping) {
+                    setPreparedMedia({
+                      gemini_names: data.gemini_names,
+                      media_mapping: data.media_mapping
+                    });
+                  }
+                } catch (e: any) {
+                  if (!(e instanceof SyntaxError)) throw e;
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Erro desconhecido ao preparar mídias");
+    } finally {
+      setIsPreparingMedia(false);
+      setPreparationStatus(null);
+    }
   }
 
   const handleEstimate = async () => {
@@ -647,24 +732,61 @@ export default function App() {
             </div>
 
             {/* Ações */}
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-              <div className="text-xs text-slate-500">
-                <p className="font-bold flex items-center gap-1"><Brain size={14} className="text-blue-500" /> IA: Gemini 2.5 Pro</p>
-                <p className="mt-1 italic">Os arquivos serão processados na nuvem e retornados para o seu computador.</p>
-                {generationStatus && (
-                  <p className="mt-3 text-indigo-600 font-medium animate-pulse flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" /> {generationStatus}
-                  </p>
-                )}
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                  <div className="text-xs text-slate-500">
+                    <p className="font-bold flex items-center gap-1"><Brain size={14} className="text-blue-500" /> IA: Gemini 2.5 Pro</p>
+                    <p className="mt-1 italic">Os arquivos serão processados na nuvem e retornados para o seu computador.</p>
+                  </div>
+                  <button onClick={handleEstimate} disabled={isEstimating || isGenerating} className="text-blue-600 hover:text-blue-800 font-bold text-sm transition-all flex items-center gap-2">
+                    <DollarSign size={16} /> ESTIMAR CUSTO
+                  </button>
               </div>
-              
-              <button 
-                onClick={handleEstimate}
-                disabled={isEstimating || isGenerating}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-4 rounded-xl font-bold shadow-lg transition-all flex items-center gap-3 disabled:opacity-70 active:scale-95"
-              >
-                {isGenerating ? "GERANDO LAUDO..." : isEstimating ? "CALCULANDO..." : <>PROCESSAR LAUDO <BrainCircuit size={20} /></>}
-              </button>
+
+              <div className="grid grid-cols-2 gap-4 mt-2">
+                  {/* Step 1 */}
+                  <div className={`p-4 rounded-xl border-2 transition-all ${preparedMedia ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="flex justify-between items-center mb-3">
+                          <h3 className={`font-bold ${preparedMedia ? 'text-emerald-700' : 'text-slate-700'}`}>1. Preparar Mídias</h3>
+                          {preparedMedia && <CheckCircle2 size={20} className="text-emerald-500" />}
+                      </div>
+                      <p className="text-xs text-slate-500 mb-4 h-8">Faz o upload e processamento das fotos no servidor da IA.</p>
+                      
+                      <button 
+                        onClick={handlePrepareMedia}
+                        disabled={isPreparingMedia || excelFiles.length === 0}
+                        className={`w-full py-3 rounded-lg font-bold shadow-sm transition-all flex items-center justify-center gap-2 ${preparedMedia ? 'bg-white text-emerald-600 border border-emerald-200 hover:bg-emerald-50' : 'bg-slate-800 text-white hover:bg-slate-900 disabled:opacity-50'}`}
+                      >
+                        {isPreparingMedia ? <><Loader2 size={18} className="animate-spin"/> PROCESSANDO...</> : preparedMedia ? "REFAZER PREPARO" : "INICIAR PREPARO"}
+                      </button>
+                      
+                      {preparationStatus && (
+                        <p className="mt-3 text-xs text-indigo-600 font-medium flex items-center gap-1">
+                          {isPreparingMedia && <Loader2 className="w-3 h-3 animate-spin" />} {preparationStatus}
+                        </p>
+                      )}
+                  </div>
+
+                  {/* Step 2 */}
+                  <div className={`p-4 rounded-xl border-2 transition-all ${preparedMedia ? 'bg-blue-50 border-blue-200 shadow-md' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
+                      <h3 className="font-bold text-blue-800 mb-3">2. Gerar Laudo</h3>
+                      <p className="text-xs text-blue-600/70 mb-4 h-8">Gera o texto com a IA e monta o arquivo Word final.</p>
+                      
+                      <button 
+                        onClick={handleConfirmGenerate}
+                        disabled={!preparedMedia || isGenerating}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isGenerating ? <><Loader2 size={18} className="animate-spin"/> GERANDO...</> : <><BrainCircuit size={18} /> GERAR RESULTADO</>}
+                      </button>
+                      
+                      {generationStatus && (
+                        <p className="mt-3 text-xs text-blue-600 font-medium flex items-center gap-1">
+                          {isGenerating && <Loader2 className="w-3 h-3 animate-spin" />} {generationStatus}
+                        </p>
+                      )}
+                  </div>
+              </div>
             </div>
 
             {downloadUrl && !isGenerating && (
