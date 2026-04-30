@@ -365,8 +365,8 @@ def prepare_media():
             
         def prepare_stream():
             try:
-                url_to_local = {}
-                yield f"data: {json.dumps({'status': 'Lendo planilhas e identificando mídias...', 'step': 1})}\n\n"
+                unique_urls = set()
+                yield f"data: {json.dumps({'status': 'Lendo planilhas e extraindo links de mídias...', 'step': 1})}\n\n"
                 
                 for path in saved_paths:
                     try:
@@ -375,9 +375,22 @@ def prepare_media():
                             if isinstance(val, str):
                                 for url in extract_urls(val):
                                     if 'supabase.co' in url:
-                                        local = download_file(url, run_folder)
-                                        if local: url_to_local[url] = local
+                                        unique_urls.add(url)
                     except: pass
+                
+                url_to_local = {}
+                total_urls = len(unique_urls)
+                
+                if total_urls > 0:
+                    yield f"data: {json.dumps({'status': f'Iniciando download de {total_urls} mídias únicas do servidor...', 'step': 1})}\n\n"
+                
+                downloaded = 0
+                for url in unique_urls:
+                    downloaded += 1
+                    # Enviar ping a cada download para evitar Timeout no Nginx (Error Network)
+                    yield f"data: {json.dumps({'status': f'Baixando mídia {downloaded}/{total_urls}...', 'step': 1})}\n\n"
+                    local = download_file(url, run_folder)
+                    if local: url_to_local[url] = local
                 
                 gemini_names = []
                 media_mapping = "\nMAPEAMENTO DE IMAGENS:\n"
