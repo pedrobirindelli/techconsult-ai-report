@@ -977,7 +977,7 @@ def generate_photo_report_stream():
                         
                         uploaded_gemini = []
                         for img in downloaded_images:
-                            g_file = client.files.upload(file=img["path"])
+                            g_file = client.files.upload(file=img["path"], config={'mime_type': 'image/jpeg'})
                             uploaded_gemini.append(g_file)
                             contents.append(g_file)
                             
@@ -987,7 +987,7 @@ def generate_photo_report_stream():
                                 aud_path = os.path.join(run_folder, f"aud_{idx}_{a_idx}.m4a")
                                 with open(aud_path, 'wb') as f:
                                     f.write(res.content)
-                                g_file = client.files.upload(file=aud_path)
+                                g_file = client.files.upload(file=aud_path, config={'mime_type': 'audio/mp4'})
                                 uploaded_gemini.append(g_file)
                                 contents.append(g_file)
                                 
