@@ -865,7 +865,7 @@ def generate_photo_report_stream():
         os.makedirs(run_folder, exist_ok=True)
         
         try:
-            q.put({"status": "Iniciando geração do relatório fotográfico...", "step": 1})
+            q.put({"status": "Inicializando motor de inteligência artificial e estruturando documento base...", "step": 1})
             
             doc = Document()
             
@@ -897,7 +897,7 @@ def generate_photo_report_stream():
             font.size = docx.shared.Pt(12)
             
             for idx, record in enumerate(records):
-                q.put({"status": f"Processando registro {idx+1}/{total_records}...", "step": 2})
+                q.put({"status": f"[{idx+1}/{total_records}] Analisando apontamentos técnicos e extraindo metadados...", "step": 2})
                 
                 doc.add_heading(record.get("form_title", f"Registro #{idx+1}"), level=2)
                 p_meta = doc.add_paragraph(f"Lançado por {record.get('inspector', '')} em {record.get('date', '')}")
@@ -916,7 +916,7 @@ def generate_photo_report_stream():
                 downloaded_images = []
                 for i_idx, img_url in enumerate(images):
                     try:
-                        q.put({"status": f"Baixando imagem {i_idx+1} do registro {idx+1}...", "step": 3})
+                        q.put({"status": f"[{idx+1}/{total_records}] Otimizando e corrigindo orientação da imagem {i_idx+1}...", "step": 3})
                         res = requests.get(img_url, timeout=15)
                         if res.status_code == 200:
                             img_path = os.path.join(run_folder, f"img_{idx}_{i_idx}.jpg")
@@ -971,7 +971,7 @@ def generate_photo_report_stream():
                                 
                 # IA Legenda
                 if (images or audios) and api_key:
-                    q.put({"status": f"Gerando legenda com IA (Gemini 2.5 Flash) para o registro {idx+1}...", "step": 4})
+                    q.put({"status": f"[{idx+1}/{total_records}] Ouvindo áudios e inspecionando patologias visuais para gerar legenda técnica com IA...", "step": 4})
                     try:
                         contents = [f"DADOS DO REGISTRO:\n{json.dumps(text_data, ensure_ascii=False)}"]
                         
@@ -1020,7 +1020,7 @@ def generate_photo_report_stream():
             output_path = os.path.join(UPLOAD_FOLDER, output_filename)
             doc.save(output_path)
             
-            q.put({"status": "Concluído", "download_url": f"/download_photo_report/{output_filename}", "step": 5})
+            q.put({"status": "Mágica concluída! O laudo fotográfico está pronto e o download iniciará em instantes.", "download_url": f"/download_photo_report/{output_filename}", "step": 5})
             
         except Exception as e:
             q.put({"error": f"Erro interno: {str(e)}"})
