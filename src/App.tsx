@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Upload, Save, FileText, Download, Loader2, FolderOpen, BrainCircuit, Settings, Trash2, FileSpreadsheet, Play, Brain, FileSignature, DollarSign, LogOut, Users, CheckCircle2, FilePlus } from 'lucide-react'
+import { Upload, Save, FileText, Download, Loader2, FolderOpen, BrainCircuit, Settings, Trash2, FileSpreadsheet, Play, Brain, FileSignature, LogOut, Users, CheckCircle2, FilePlus } from 'lucide-react'
 import { supabase } from './lib/supabaseClient'
 
 
@@ -722,6 +722,7 @@ export default function App() {
                     <p className="font-bold flex items-center gap-1"><Brain size={14} className="text-blue-500" /> IA: Gemini 2.5 Pro</p>
                     <p className="mt-1 italic">Os arquivos serão processados na nuvem e retornados para o seu computador.</p>
                   </div>
+              </div>
               <div className="mt-4">
                   {estimation && !isGenerating && !isPreparingMedia && !actualTokens && (
                       <div className="mb-4 text-xs font-mono bg-amber-50 text-amber-800 px-3 py-2 rounded border border-amber-200">
