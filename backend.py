@@ -851,5 +851,199 @@ def admin_reset_all_tokens():
 
     return jsonify({"success": True, "updated_count": updated})
 
+@app.route('/generate_photo_report_stream', methods=['POST'])
+def generate_photo_report_stream():
+    data = request.json
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+    
+    q = queue.Queue()
+    
+    def process_report():
+        run_id = str(uuid.uuid4())
+        run_folder = os.path.join(UPLOAD_FOLDER, f"photo_report_{run_id}")
+        os.makedirs(run_folder, exist_ok=True)
+        
+        try:
+            q.put({"status": "Iniciando geração do relatório fotográfico...", "step": 1})
+            
+            doc = Document()
+            
+            # Cabeçalho
+            title = data.get("title", "Vistoria")
+            address = data.get("address", "")
+            engineer = data.get("engineer", "")
+            
+            heading = doc.add_heading(f"Relatório de Vistoria: {title}", level=1)
+            heading.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+            
+            if address:
+                p_add = doc.add_paragraph(f"Endereço: {address}")
+                p_add.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+                
+            p_eng = doc.add_paragraph(f"Engenheiro/Responsável: {engineer}")
+            p_eng.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+            
+            p_date = doc.add_paragraph(f"Relatório gerado em: {pd.Timestamp.now().strftime('%d/%m/%Y %H:%M:%S')}")
+            p_date.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+            
+            records = data.get("records", [])
+            total_records = len(records)
+            
+            # Fonte Arial 12
+            style = doc.styles['Normal']
+            font = style.font
+            font.name = 'Arial'
+            font.size = docx.shared.Pt(12)
+            
+            for idx, record in enumerate(records):
+                q.put({"status": f"Processando registro {idx+1}/{total_records}...", "step": 2})
+                
+                doc.add_heading(record.get("form_title", f"Registro #{idx+1}"), level=2)
+                p_meta = doc.add_paragraph(f"Lançado por {record.get('inspector', '')} em {record.get('date', '')}")
+                p_meta.runs[0].font.color.rgb = docx.shared.RGBColor(100, 100, 100)
+                
+                text_data = record.get("text_data", {})
+                for k, v in text_data.items():
+                    p = doc.add_paragraph()
+                    p.add_run(f"{k}: ").bold = True
+                    p.add_run(str(v))
+                    
+                images = record.get("images", [])
+                audios = record.get("audios", [])
+                
+                # Baixar imagens e corrigir orientação
+                downloaded_images = []
+                for i_idx, img_url in enumerate(images):
+                    try:
+                        q.put({"status": f"Baixando imagem {i_idx+1} do registro {idx+1}...", "step": 3})
+                        res = requests.get(img_url, timeout=15)
+                        if res.status_code == 200:
+                            img_path = os.path.join(run_folder, f"img_{idx}_{i_idx}.jpg")
+                            with open(img_path, 'wb') as f:
+                                f.write(res.content)
+                            fix_image_orientation(img_path)
+                            
+                            # Checar orientacao para tabela
+                            with Image.open(img_path) as im:
+                                w, h = im.size
+                                is_landscape = w >= h
+                            downloaded_images.append({"path": img_path, "landscape": is_landscape})
+                    except Exception as e:
+                        print(f"Erro ao baixar imagem: {e}")
+                        
+                # Montar tabela de imagens no Word
+                if downloaded_images:
+                    # Agrupar imagens em linhas: paisagem=1 por linha, retrato=2 por linha
+                    rows = []
+                    current_row = []
+                    for img in downloaded_images:
+                        if img["landscape"]:
+                            if current_row:
+                                rows.append(current_row)
+                                current_row = []
+                            rows.append([img])
+                        else:
+                            current_row.append(img)
+                            if len(current_row) == 2:
+                                rows.append(current_row)
+                                current_row = []
+                    if current_row:
+                        rows.append(current_row)
+                        
+                    table = doc.add_table(rows=len(rows), cols=2)
+                    for r_idx, row_imgs in enumerate(rows):
+                        if len(row_imgs) == 1 and row_imgs[0]["landscape"]:
+                            # Mesclar colunas para paisagem
+                            cell = table.cell(r_idx, 0)
+                            cell.merge(table.cell(r_idx, 1))
+                            p = cell.paragraphs[0]
+                            p.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+                            run = p.add_run()
+                            run.add_picture(row_imgs[0]["path"], width=Cm(15))
+                        else:
+                            for c_idx, img in enumerate(row_imgs):
+                                cell = table.cell(r_idx, c_idx)
+                                p = cell.paragraphs[0]
+                                p.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+                                run = p.add_run()
+                                run.add_picture(img["path"], width=Cm(7.5))
+                                
+                # IA Legenda
+                if (images or audios) and api_key:
+                    q.put({"status": f"Gerando legenda com IA (Gemini 2.5 Flash) para o registro {idx+1}...", "step": 4})
+                    try:
+                        contents = [f"DADOS DO REGISTRO:\n{json.dumps(text_data, ensure_ascii=False)}"]
+                        
+                        uploaded_gemini = []
+                        for img in downloaded_images:
+                            g_file = client.files.upload(file=img["path"])
+                            uploaded_gemini.append(g_file)
+                            contents.append(g_file)
+                            
+                        for a_idx, aud_url in enumerate(audios):
+                            res = requests.get(aud_url, timeout=15)
+                            if res.status_code == 200:
+                                aud_path = os.path.join(run_folder, f"aud_{idx}_{a_idx}.m4a")
+                                with open(aud_path, 'wb') as f:
+                                    f.write(res.content)
+                                g_file = client.files.upload(file=aud_path)
+                                uploaded_gemini.append(g_file)
+                                contents.append(g_file)
+                                
+                        contents.append("Crie UMA ÚNICA legenda consolidada, técnica e descritiva para este conjunto de imagens, incorporando as descrições dos áudios e os dados de texto. Seja direto, evite floreios e NÃO pule linhas. Máximo 3 frases.")
+                        
+                        resp = client.models.generate_content(
+                            model='gemini-2.5-flash',
+                            contents=contents
+                        )
+                        caption = resp.text.strip()
+                        
+                        # Limpar arquivos do Gemini
+                        for g_f in uploaded_gemini:
+                            try:
+                                client.files.delete(name=g_f.name)
+                            except:
+                                pass
+                                
+                    except Exception as e:
+                        caption = f"[Erro ao gerar legenda IA: {str(e)}]"
+                else:
+                    caption = "Registros fotográficos do apontamento."
+                    
+                if downloaded_images:
+                    p_cap = doc.add_paragraph(caption)
+                    p_cap.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+                    p_cap.runs[0].italic = True
+                    
+            output_filename = f"Relatorio_Fotografico_{run_id}.docx"
+            output_path = os.path.join(UPLOAD_FOLDER, output_filename)
+            doc.save(output_path)
+            
+            q.put({"status": "Concluído", "download_url": f"/download_report/{output_filename}", "step": 5})
+            
+        except Exception as e:
+            q.put({"error": f"Erro interno: {str(e)}"})
+        finally:
+            q.put(None)
+            
+    threading.Thread(target=process_report).start()
+    
+    def generate():
+        while True:
+            msg = q.get()
+            if msg is None:
+                break
+            yield f"data: {json.dumps(msg)}\n\n"
+            
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
+
+@app.route('/download_report/<filename>', methods=['GET'])
+def download_report(filename):
+    file_path = os.path.join(UPLOAD_FOLDER, filename)
+    if os.path.exists(file_path):
+        return send_file(file_path, as_attachment=True)
+    return jsonify({"error": "Arquivo não encontrado"}), 404
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
