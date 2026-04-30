@@ -540,8 +540,9 @@ def generate_report():
 
                 yield f"data: {json.dumps({'status': 'Carregando mídias preparadas...', 'step': 3})}\n\n"
                 gemini_files = []
-                for name in gemini_names:
+                for idx_g, name in enumerate(gemini_names):
                     try:
+                        yield f"data: {json.dumps({'status': f'Verificando mídia {idx_g+1}/{len(gemini_names)}...', 'step': 3})}\n\n"
                         g_file = client.files.get(name=name)
                         if g_file.state.name == "ACTIVE":
                             gemini_files.append(g_file)
@@ -621,8 +622,8 @@ def generate_report():
                                 used_tokens = data.usage_metadata.total_token_count
                             yield f"data: {json.dumps({'status': f'Analisando dados e gerando texto (recebidos {len(raw_text)} bytes)...', 'step': 5})}\n\n"
                     except queue.Empty:
-                        # Timeout do queue atingido, envia ping para manter conexao viva
-                        yield ": keep-alive\n\n"
+                        # Timeout do queue atingido, envia ping de dados para manter conexao viva e forçar flush
+                        yield f"data: {json.dumps({'status': 'Análise da IA em andamento, aguarde...', 'step': 5})}\n\n"
                 
                 yield f"data: {json.dumps({'status': 'Montando documento Word...', 'step': 6})}\n\n"
                 
