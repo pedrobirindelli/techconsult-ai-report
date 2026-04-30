@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 from docx import Document
 from docx.shared import Cm
 from functools import wraps
+from PIL import Image, ExifTags
 
 load_dotenv()
 
@@ -98,6 +99,34 @@ def extract_urls(text):
     import re
     return re.findall(r'(https?://[^\s\]\n]+)', str(text))
 
+def fix_image_orientation(filepath):
+    try:
+        if not filepath.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
+            return
+        img = Image.open(filepath)
+        for orientation in ExifTags.TAGS.keys():
+            if ExifTags.TAGS[orientation] == 'Orientation':
+                break
+        
+        exif = img._getexif()
+        if exif is not None:
+            orientation_val = exif.get(orientation, None)
+            if orientation_val == 3:
+                img = img.rotate(180, expand=True)
+            elif orientation_val == 6:
+                img = img.rotate(270, expand=True)
+            elif orientation_val == 8:
+                img = img.rotate(90, expand=True)
+            
+            # Remove EXIF and save
+            data = list(img.getdata())
+            img_without_exif = Image.new(img.mode, img.size)
+            img_without_exif.putdata(data)
+            img_without_exif.save(filepath, format=img.format if img.format else 'JPEG')
+            img.close()
+    except Exception as e:
+        print(f"Failed to fix EXIF for {filepath}: {e}")
+
 def download_file(url, folder):
     try:
         parsed = urlparse(url)
@@ -109,6 +138,7 @@ def download_file(url, folder):
             with open(filepath, 'wb') as f:
                 for chunk in response.iter_content(8192):
                     f.write(chunk)
+            fix_image_orientation(filepath)
             return filepath
     except Exception as e:
         print(f"Failed download {url}: {e}")
@@ -188,6 +218,21 @@ def get_style_dna(doc):
             dna[style_name] = {"p": p, "run": model_run}
     return dna
 
+def add_picture_smart(run, local_img, in_table=False):
+    try:
+        img = Image.open(local_img)
+        w, h = img.size
+        img.close()
+        if in_table:
+            run.add_picture(local_img, width=Cm(7.5))
+        else:
+            if w > h:
+                run.add_picture(local_img, width=Cm(15))
+            else:
+                run.add_picture(local_img, height=Cm(10))
+    except:
+        run.add_picture(local_img, width=Cm(10))
+
 def reconstruct_doc(json_data, template_path, output_path, temp_folder):
     try:
         doc = docx.Document(template_path) if template_path and os.path.exists(template_path) else docx.Document()
@@ -264,7 +309,7 @@ def reconstruct_doc(json_data, template_path, output_path, temp_folder):
                         local_img = download_file(img_url, temp_folder)
                         if local_img:
                             p = doc.add_paragraph(); p.alignment = 1
-                            run = p.add_run(); run.add_picture(local_img, height=Cm(10))
+                            run = p.add_run(); add_picture_smart(run, local_img, in_table=False)
                             caption = pair[0].get("caption", "")
                             if caption:
                                 p_cap = doc.add_paragraph(); p_cap.alignment = 1
@@ -279,7 +324,7 @@ def reconstruct_doc(json_data, template_path, output_path, temp_folder):
                             if local_img:
                                 cell_img = table.cell(0, col_idx)
                                 p = cell_img.paragraphs[0]; p.alignment = 1
-                                run = p.add_run(); run.add_picture(local_img, height=Cm(10))
+                                run = p.add_run(); add_picture_smart(run, local_img, in_table=True)
                                 caption = img_block.get("caption", "")
                                 if caption:
                                     cell_cap = table.cell(1, col_idx)
@@ -393,7 +438,7 @@ def prepare_media():
                     if local: url_to_local[url] = local
                 
                 gemini_names = []
-                media_mapping = "\nMAPEAMENTO DE IMAGENS:\n"
+                media_mapping_dict = {}
                 
                 media_files = [local for local in url_to_local.values() if local.lower().endswith(('.jpeg', '.jpg', '.png', '.webp', '.mp3', '.m4a', '.wav', '.ogg', '.mp4', '.avi', '.mov'))]
                 total_media = len(media_files)
@@ -418,7 +463,7 @@ def prepare_media():
                             
                             if g_file.state.name == "ACTIVE":
                                 gemini_names.append(g_file.name)
-                                media_mapping += f"- {filename} -> {url}\n"
+                                media_mapping_dict[g_file.name] = url
                                 yield f"data: {json.dumps({'status': f'Mídia {processed}/{total_media} pronta!', 'step': 2})}\n\n"
                             else:
                                 yield f"data: {json.dumps({'status': f'Aviso: A mídia {friendly_name} falhou (status: {g_file.state.name}).', 'step': 2})}\n\n"
@@ -426,7 +471,7 @@ def prepare_media():
                         except Exception as e:
                             yield f"data: {json.dumps({'status': f'Aviso: Erro ao enviar {friendly_name} ({str(e)}).', 'step': 2})}\n\n"
 
-                yield f"data: {json.dumps({'status': 'Preparo de mídias concluído!', 'step': 3, 'gemini_names': gemini_names, 'media_mapping': media_mapping})}\n\n"
+                yield f"data: {json.dumps({'status': 'Preparo de mídias concluído!', 'step': 3, 'gemini_names': gemini_names, 'media_mapping': json.dumps(media_mapping_dict)})}\n\n"
             except Exception as e:
                 yield f"data: {json.dumps({'error': f'Erro ao preparar mídias: {str(e)}'})}\n\n"
             finally:
@@ -528,14 +573,28 @@ def generate_report():
                     f"REGRAS DE IMAGEM: Não inclua 100% das fotos (evite redundância), mas INCLUA TODAS as imagens relevantes para ilustrar anomalias/apontamentos. Toda imagem deve ter uma legenda descritiva. Use a URL exata do MAPEAMENTO DE IMAGENS. "
                     f"IMPORTANTE: NUNCA use tags HTML (como <span> ou <font>). Gere apenas texto puro. Regras do Usuário: {rules}"
                 )
-                user_prompt = f"REFERÊNCIAS:\n{all_ref_text[:15000]}\n\nFONTES:\n{sources_text[:15000]}\n\nDADOS:\n{all_excel_str}\n\n{media_mapping}"
+                user_prompt = f"REFERÊNCIAS:\n{all_ref_text[:15000]}\n\nFONTES:\n{sources_text[:15000]}\n\nDADOS:\n{all_excel_str}\n"
+                
+                try:
+                    media_mapping_dict = json.loads(media_mapping)
+                except:
+                    media_mapping_dict = {}
+                    
+                contents = []
+                for g_file in gemini_files:
+                    url = media_mapping_dict.get(g_file.name, "")
+                    if url:
+                        contents.append(f"[ESTA É A IMAGEM REFERENTE À URL: {url}]")
+                    contents.append(g_file)
+                contents.append(user_prompt)
+
                 # Keep-alive para proxy
                 q = queue.Queue()
                 def fetch_gemini():
                     try:
                         resp = client.models.generate_content_stream(
                             model='gemini-2.5-pro',
-                            contents=gemini_files + [user_prompt],
+                            contents=contents,
                             config=genai.types.GenerateContentConfig(system_instruction=sys_inst, response_mime_type="application/json")
                         )
                         for chunk in resp:
