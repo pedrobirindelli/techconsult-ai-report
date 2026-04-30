@@ -357,14 +357,18 @@ def prepare_media():
         run_folder = os.path.join(UPLOAD_FOLDER, folder_id)
         os.makedirs(run_folder, exist_ok=True)
         
+        saved_paths = []
+        for idx, excel in enumerate(excel_files):
+            path = os.path.join(run_folder, f"data_{idx}.xlsx")
+            excel.save(path)
+            saved_paths.append(path)
+            
         def prepare_stream():
             try:
                 url_to_local = {}
                 yield f"data: {json.dumps({'status': 'Lendo planilhas e identificando mídias...', 'step': 1})}\n\n"
                 
-                for idx, excel in enumerate(excel_files):
-                    path = os.path.join(run_folder, f"data_{idx}.xlsx")
-                    excel.save(path)
+                for path in saved_paths:
                     try:
                         df = pd.read_excel(path)
                         for val in df.values.flatten():
