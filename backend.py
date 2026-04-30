@@ -1020,7 +1020,7 @@ def generate_photo_report_stream():
             output_path = os.path.join(UPLOAD_FOLDER, output_filename)
             doc.save(output_path)
             
-            q.put({"status": "Concluído", "download_url": f"/download_report/{output_filename}", "step": 5})
+            q.put({"status": "Concluído", "download_url": f"/download_photo_report/{output_filename}", "step": 5})
             
         except Exception as e:
             q.put({"error": f"Erro interno: {str(e)}"})
@@ -1038,8 +1038,8 @@ def generate_photo_report_stream():
             
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
-@app.route('/download_report/<filename>', methods=['GET'])
-def download_report(filename):
+@app.route('/download_photo_report/<filename>', methods=['GET'])
+def download_photo_report(filename):
     file_path = os.path.join(UPLOAD_FOLDER, filename)
     if os.path.exists(file_path):
         return send_file(file_path, as_attachment=True)
