@@ -888,10 +888,11 @@ def api_describe_media():
             mime = 'audio/mp4'
             prompt = "Transcreva de forma resumida e objetiva o que foi falado neste áudio de vistoria técnica. Não divague."
             
-        if not GEMINI_API_KEY:
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
             return jsonify({"error": "Gemini API key not found"}), 500
             
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        client = genai.Client(api_key=api_key)
         g_file = client.files.upload(file=file_path, config={'mime_type': mime})
         
         resp = client.models.generate_content(
