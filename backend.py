@@ -853,6 +853,66 @@ def admin_reset_all_tokens():
 
     return jsonify({"success": True, "updated_count": updated})
 
+@app.route('/api/describe_media', methods=['POST'])
+def api_describe_media():
+    data = request.json
+    url = data.get('url')
+    media_type = data.get('type') # 'image' or 'audio'
+    
+    if not url or not media_type:
+        return jsonify({"error": "Missing url or type"}), 400
+        
+    try:
+        run_folder = os.path.join(UPLOAD_FOLDER, f"temp_{uuid.uuid4().hex}")
+        os.makedirs(run_folder, exist_ok=True)
+        
+        # Download media
+        res = requests.get(url, timeout=15)
+        if res.status_code != 200:
+            return jsonify({"error": "Failed to download media"}), 400
+            
+        if media_type == 'image':
+            ext = '.jpg'
+        else:
+            ext = '.mp4'
+            
+        file_path = os.path.join(run_folder, f"media{ext}")
+        with open(file_path, 'wb') as f:
+            f.write(res.content)
+            
+        if media_type == 'image':
+            fix_image_orientation(file_path)
+            mime = 'image/jpeg'
+            prompt = "Descreva de forma técnica e objetiva o que você vê nesta imagem de vistoria, em 1 ou 2 frases curtas. Não divague."
+        else:
+            mime = 'audio/mp4'
+            prompt = "Transcreva de forma resumida e objetiva o que foi falado neste áudio de vistoria técnica. Não divague."
+            
+        if not GEMINI_API_KEY:
+            return jsonify({"error": "Gemini API key not found"}), 500
+            
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        g_file = client.files.upload(file=file_path, config={'mime_type': mime})
+        
+        resp = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[g_file, prompt]
+        )
+        
+        caption = resp.text.strip()
+        
+        try:
+            client.files.delete(name=g_file.name)
+        except: pass
+        
+        # Cleanup
+        shutil.rmtree(run_folder, ignore_errors=True)
+        
+        return jsonify({"description": caption})
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/generate_photo_report_stream', methods=['POST'])
 def generate_photo_report_stream():
     data = request.json
