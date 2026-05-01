@@ -118,12 +118,14 @@ def fix_image_orientation(filepath):
             elif orientation_val == 8:
                 img = img.rotate(90, expand=True)
             
-            # Remove EXIF and save
-            data = list(img.getdata())
-            img_without_exif = Image.new(img.mode, img.size)
-            img_without_exif.putdata(data)
-            img_without_exif.save(filepath, format=img.format if img.format else 'JPEG')
-            img.close()
+        # Resize to max 1280x1280 to save memory and reduce DOCX size
+        img.thumbnail((1280, 1280), Image.Resampling.LANCZOS)
+        
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+            
+        img.save(filepath, format='JPEG', quality=75, optimize=True)
+        img.close()
     except Exception as e:
         print(f"Failed to fix EXIF for {filepath}: {e}")
 
