@@ -886,7 +886,7 @@ def api_describe_media():
             prompt = "Descreva de forma técnica e objetiva o que você vê nesta imagem de vistoria, em 1 ou 2 frases curtas. Não divague."
         else:
             mime = 'audio/mp4'
-            prompt = "Transcreva de forma resumida e objetiva o que foi falado neste áudio de vistoria técnica. Não divague."
+            prompt = "Transcreva o mais fiel possível o que foi falado neste áudio de vistoria técnica. Escreva sempre em Português do Brasil. Não resuma, faça a transcrição completa."
             
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
