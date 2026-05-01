@@ -914,6 +914,35 @@ def api_describe_media():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/generate_caption', methods=['POST'])
+def api_generate_caption():
+    data = request.json
+    text = data.get('text')
+    
+    if not text:
+        return jsonify({"error": "Missing text"}), 400
+        
+    try:
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return jsonify({"error": "Gemini API key not found"}), 500
+            
+        client = genai.Client(api_key=api_key)
+        
+        prompt = f"A partir da transcrição desta vistoria: '{text}', gere uma legenda curta para fotos (focando na descrição do cômodo e informando patologias, se houver). Resuma tudo em uma única frase no estilo de legenda de foto. Não adicione comentários extras."
+        
+        resp = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
+        
+        caption = resp.text.strip()
+        
+        return jsonify({"caption": caption})
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/generate_photo_report_stream', methods=['POST'])
 def generate_photo_report_stream():
     data = request.json
