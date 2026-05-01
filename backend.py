@@ -858,6 +858,7 @@ def api_describe_media():
     data = request.json
     url = data.get('url')
     media_type = data.get('type') # 'image' or 'audio'
+    context = data.get('context', '')
     
     if not url or not media_type:
         return jsonify({"error": "Missing url or type"}), 400
@@ -883,7 +884,10 @@ def api_describe_media():
         if media_type == 'image':
             fix_image_orientation(file_path)
             mime = 'image/jpeg'
-            prompt = "Descreva de forma técnica e objetiva o que você vê nesta imagem de vistoria, em 1 ou 2 frases curtas. Não divague."
+            if context.strip():
+                prompt = f"Baseado na transcrição a seguir do áudio desta vistoria: '{context}', descreva de forma técnica o que você vê especificamente NESTA imagem para servir como uma legenda curta (focando no cômodo e nas patologias, se houver). Escreva apenas 1 frase direta."
+            else:
+                prompt = "Descreva de forma técnica e objetiva o que você vê nesta imagem de vistoria, em 1 ou 2 frases curtas. Não divague."
         else:
             mime = 'audio/mp4'
             prompt = "Transcreva o mais fiel possível o que foi falado neste áudio de vistoria técnica. Escreva sempre em Português do Brasil. Não resuma, faça a transcrição completa."
